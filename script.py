@@ -13,11 +13,13 @@ from mathutils import Vector
 from mathutils import Matrix
 import math
 
+"""
 bl_info = {
     "name": "TMTK Tools",
     "blender": (3, 0, 0),
     "category": "Object",
 }
+"""
 
 class TMTKAnimationFixer(bpy.types.Operator):
     bl_idname = "object.tmtkanimationadfixer"
@@ -57,16 +59,25 @@ class TMTKAnimationFixer(bpy.types.Operator):
             bone.transform(transformMatrix)
         bpy.ops.object.mode_set(mode="OBJECT")
 
+class TMTKSubMenu(bpy.types.Menu):
+    bl_idname = 'object.tmtktools'
+    bl_label = 'TMTK Tools'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator(TMTKAnimationFixer.bl_idname)
+
 def menu_func(self, context):
-    self.layout.operator(TMTKAnimationFixer.bl_idname, text=TMTKAnimationFixer.bl_label)
+    self.layout.menu(TMTKSubMenu.bl_idname)
 
 def register():
     bpy.utils.register_class(TMTKAnimationFixer)
+    bpy.utils.register_class(TMTKSubMenu)
     bpy.types.VIEW3D_MT_object.append(menu_func)
-
 
 def unregister():
     bpy.utils.unregister_class(TMTKAnimationFixer)
+    bpy.utils.unregister_class(TMTKSubMenu)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
 
 if __name__ == "__main__":
