@@ -13,7 +13,7 @@ from mathutils import Vector
 from mathutils import Matrix
 import math
 
-"""
+
 bl_info = {
     "name": "TMTK Tools",
     "blender": (3, 0, 0),
@@ -21,7 +21,6 @@ bl_info = {
     "version": (0, 1),
     "description": "Tools to make TMTK item creation easier"
 }
-"""
 
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.lodoperator"
