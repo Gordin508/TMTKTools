@@ -2,6 +2,16 @@ import bpy
 from mathutils import Vector
 from mathutils import Matrix
 
+def get_override(area_type, region_type):
+    for area in bpy.context.screen.areas:
+        if area.type == area_type:
+            for region in area.regions:
+                if region.type == region_type:
+                    override = {'area': area, 'region': region}
+                    return override
+    #error message if the area or region wasn't found
+    raise RuntimeError("Wasn't able to find", region_type," in area ", area_type,
+                        "\n Make sure it's open while executing script.")
 
 class TMTKAnimationAdjuster(bpy.types.Operator):
     bl_idname = "object.tmtkanimationadjuster"
@@ -22,17 +32,6 @@ class TMTKAnimationAdjuster(bpy.types.Operator):
             self.scaleLocationFcurves(armaAction)
             self.editArmature(arma)
             return {'FINISHED'}
-
-    def get_override(self, area_type, region_type):
-        for area in bpy.context.screen.areas:
-            if area.type == area_type:
-                for region in area.regions:
-                    if region.type == region_type:
-                        override = {'area': area, 'region': region}
-                        return override
-        #error message if the area or region wasn't found
-        raise RuntimeError("Wasn't able to find", region_type," in area ", area_type,
-                            "\n Make sure it's open while executing script.")
 
     def scaleLocationFcurves(self, action : bpy.types.Action):
         for curve in action.fcurves:
