@@ -18,7 +18,7 @@ bl_info = {
     "name": "TMTK Tools",
     "blender": (3, 0, 0),
     "category": "Object",
-    "version": (0, 1),
+    "version": (0, 2),
     "description": "Tools to make TMTK item creation easier"
 }
 
@@ -50,6 +50,31 @@ class TMTKLODGenerator(bpy.types.Operator):
         mesh.name = mesh.name + "_L0"
         return {'FINISHED'}
 
+class TMTKExporter(bpy.types.Operator):
+    bl_idname = "object.tmtkexporter"
+    bl_label = "Export to FBX for TMTK"
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+    filter_glob: bpy.props.StringProperty(
+        default="*.fbx",
+        options={'HIDDEN'},
+        maxlen=255)
+
+    @classmethod
+    def poll(cls, context):
+        return True
+
+    def execute(self, context):
+        if (len(self.filepath) > 0):
+            if not (self.filepath.lower().endswith(".fbx")):
+                self.filepath = self.filepath + ".fbx"
+            bpy.ops.export_scene.fbx(filepath=self.filepath, object_types={"ARMATURE","MESH"},bake_space_transform=True)
+            return {'FINISHED'}
+        else:
+            return {'CANCELLED'}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
 class TMTKAnimationFixer(bpy.types.Operator):
     bl_idname = "object.tmtkanimationfixer"
@@ -97,6 +122,7 @@ class TMTKSubMenu(bpy.types.Menu):
         layout = self.layout
         layout.operator(TMTKAnimationFixer.bl_idname)
         layout.operator(TMTKLODGenerator.bl_idname)
+        layout.operator(TMTKExporter.bl_idname)
 
 def menu_func(self, context):
     self.layout.menu(TMTKSubMenu.bl_idname)
@@ -104,11 +130,13 @@ def menu_func(self, context):
 def register():
     bpy.utils.register_class(TMTKAnimationFixer)
     bpy.utils.register_class(TMTKLODGenerator)
+    bpy.utils.register_class(TMTKExporter)
     bpy.utils.register_class(TMTKSubMenu)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
 def unregister():
     bpy.utils.unregister_class(TMTKAnimationFixer)
+    bpy.utils.unregister_class(TMTKExporter)
     bpy.utils.unregister_class(TMTKSubMenu)
     bpy.utils.unregister_class(TMTKLODGenerator)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
