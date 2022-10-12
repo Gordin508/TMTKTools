@@ -3,9 +3,15 @@ from mathutils import Vector
 from mathutils import Matrix
 import math
 
-class TMTKAnimationAdjuster(bpy.types.Operator):
-    bl_idname = "object.tmtkanimationadjuster"
-    bl_label = "TMTK Animation Adjuster"
+bl_info = {
+    "name": "TMTK Tools",
+    "blender": (3, 0, 0),
+    "category": "Object",
+}
+
+class TMTKAnimationFixer(bpy.types.Operator):
+    bl_idname = "object.tmtkanimationadfixer"
+    bl_label = "TMTK Animation Fixer"
 
     @classmethod
     def poll(cls, context):
@@ -42,15 +48,15 @@ class TMTKAnimationAdjuster(bpy.types.Operator):
         bpy.ops.object.mode_set(mode="OBJECT")
 
 def menu_func(self, context):
-    self.layout.operator(TMTKAnimationAdjuster.bl_idname, text=TMTKAnimationAdjuster.bl_label)
+    self.layout.operator(TMTKAnimationFixer.bl_idname, text=TMTKAnimationFixer.bl_label)
 
 def register():
-    bpy.utils.register_class(TMTKAnimationAdjuster)
+    bpy.utils.register_class(TMTKAnimationFixer)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
 
 def unregister():
-    bpy.utils.unregister_class(TMTKAnimationAdjuster)
+    bpy.utils.unregister_class(TMTKAnimationFixer)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
 
 if __name__ == "__main__":
