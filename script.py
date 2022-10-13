@@ -25,6 +25,8 @@ bl_info = {
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.lodoperator"
     bl_label = "TMTK Create LODs"
+    decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level.",default=True)
+    linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies.",default=False)
 
     @classmethod
     def poll(cls, context):
@@ -40,15 +42,23 @@ class TMTKLODGenerator(bpy.types.Operator):
         for i in range (1,6):
             ratios = [0.8, 0.6, 0.4, 0.2, 0.1]
             new_obj = mesh.copy()
-            new_obj.data = mesh.data.copy()
+            if (self.linkedcopies):
+                new_obj.data = mesh.data
+            else:
+                new_obj.data = mesh.data.copy()
             new_obj.animation_data_clear()
             new_obj.name = mesh.name + "_L{}".format(i)
             bpy.context.collection.objects.link(new_obj)
-            mod = new_obj.modifiers.new("LOD Decimator", "DECIMATE")
-            mod.ratio = ratios[i - 1] if ratios[i - 1] > minRatio else minRatio
+            if (self.decimate):
+                mod = new_obj.modifiers.new("LOD Decimator", "DECIMATE")
+                mod.ratio = ratios[i - 1] if ratios[i - 1] > minRatio else minRatio
 
         mesh.name = mesh.name + "_L0"
         return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.invoke_props_dialog(self)
+        return {'RUNNING_MODAL'}
 
 class TMTKExporter(bpy.types.Operator):
     bl_idname = "object.tmtkexporter"
@@ -58,6 +68,8 @@ class TMTKExporter(bpy.types.Operator):
         default="*.fbx",
         options={'HIDDEN'},
         maxlen=255)
+    onlySelected: bpy.props.BoolProperty(name="Export only selected objects", default=False)
+
 
     @classmethod
     def poll(cls, context):
@@ -67,7 +79,8 @@ class TMTKExporter(bpy.types.Operator):
         if (len(self.filepath) > 0):
             if not (self.filepath.lower().endswith(".fbx")):
                 self.filepath = self.filepath + ".fbx"
-            bpy.ops.export_scene.fbx(filepath=self.filepath, object_types={"ARMATURE","MESH"},bake_space_transform=True)
+            bpy.ops.export_scene.fbx(filepath=self.filepath, object_types={"ARMATURE","MESH"},bake_space_transform=True,
+            use_selection=onlySelected)
             return {'FINISHED'}
         else:
             return {'CANCELLED'}
