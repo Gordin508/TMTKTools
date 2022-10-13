@@ -54,6 +54,7 @@ class TMTKLODGenerator(bpy.types.Operator):
                 mod.ratio = ratios[i - 1] if ratios[i - 1] > minRatio else minRatio
 
         mesh.name = mesh.name + "_L0"
+        self.report({'INFO'}, "Created LODs for {}".format(mesh.name))
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -69,7 +70,7 @@ class TMTKExporter(bpy.types.Operator):
         options={'HIDDEN'},
         maxlen=255)
     onlySelected: bpy.props.BoolProperty(name="Export only selected objects", default=False)
-
+    onlyVisible: bpy.props.BoolProperty(name="Export only visible objects", default=False)
 
     @classmethod
     def poll(cls, context):
@@ -80,7 +81,8 @@ class TMTKExporter(bpy.types.Operator):
             if not (self.filepath.lower().endswith(".fbx")):
                 self.filepath = self.filepath + ".fbx"
             bpy.ops.export_scene.fbx(filepath=self.filepath, object_types={"ARMATURE","MESH"},bake_space_transform=True,
-            use_selection=onlySelected)
+            use_selection=self.onlySelected, axis_forward='-Z', axis_up='Y', use_visible = self.onlyVisible)
+            self.report({'INFO'}, "Exported as FBX to {}".format(self.filepath))
             return {'FINISHED'}
         else:
             return {'CANCELLED'}
