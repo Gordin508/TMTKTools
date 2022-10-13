@@ -16,15 +16,18 @@ import math
 
 bl_info = {
     "name": "TMTK Tools",
-    "blender": (3, 0, 0),
+    "blender": (2, 90, 0),
     "category": "Object",
     "version": (0, 2),
     "description": "Tools to make TMTK item creation easier"
 }
 
+VERSION = bpy.app.version
+
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.lodoperator"
     bl_label = "TMTK Create LODs"
+    bl_description = "Create LODs for selected object"
     decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level.",default=True)
     linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies.",default=False)
 
@@ -61,16 +64,19 @@ class TMTKLODGenerator(bpy.types.Operator):
         context.window_manager.invoke_props_dialog(self)
         return {'RUNNING_MODAL'}
 
+USE_VISIBLE_AVAILABLE = (VERSION[0] > 3 or (VERSION[0] >= 3 and VERSION[1] >= 2))
 class TMTKExporter(bpy.types.Operator):
     bl_idname = "object.tmtkexporter"
     bl_label = "Export to FBX for TMTK"
+    bl_description = "Export objects to FBX file with correct settings for TMTK"
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")
     filter_glob: bpy.props.StringProperty(
         default="*.fbx",
         options={'HIDDEN'},
         maxlen=255)
     onlySelected: bpy.props.BoolProperty(name="Export only selected objects", default=False)
-    onlyVisible: bpy.props.BoolProperty(name="Export only visible objects", default=False)
+    if (USE_VISIBLE_AVAILABLE):
+        onlyVisible: bpy.props.BoolProperty(name="Export only visible objects", default=False)
 
     @classmethod
     def poll(cls, context):
@@ -80,8 +86,14 @@ class TMTKExporter(bpy.types.Operator):
         if (len(self.filepath) > 0):
             if not (self.filepath.lower().endswith(".fbx")):
                 self.filepath = self.filepath + ".fbx"
-            bpy.ops.export_scene.fbx(filepath=self.filepath, object_types={"ARMATURE","MESH"},bake_space_transform=True,
-            use_selection=self.onlySelected, axis_forward='-Z', axis_up='Y', use_visible = self.onlyVisible)
+            exportArgs = {"filepath": self.filepath,
+            "object_types": {"ARMATURE","MESH"},
+            "bake_space_transform": True,
+            "use_selection": self.onlySelected,
+            "axis_forward": '-Z', "axis_up":'Y'}
+            if (USE_VISIBLE_AVAILABLE):
+                exportArgs["use_visible"] = self.onlyVisible
+            bpy.ops.export_scene.fbx(**exportArgs)
             self.report({'INFO'}, "Exported as FBX to {}".format(self.filepath))
             return {'FINISHED'}
         else:
@@ -94,6 +106,7 @@ class TMTKExporter(bpy.types.Operator):
 class TMTKAnimationFixer(bpy.types.Operator):
     bl_idname = "object.tmtkanimationfixer"
     bl_label = "TMTK Animation Fixer"
+    bl_description = "Prepare animation for export to TMTK (only use directly before exporting)"
 
     @classmethod
     def poll(cls, context):
