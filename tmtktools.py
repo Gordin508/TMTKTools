@@ -247,7 +247,7 @@ class TMTKHints(bpy.types.Operator):
         if not (self.hasMaterial):
             addText(box, "- TMTK will refuse objects without any assigned material.")
         else:
-            nameSuggestions = ", ".join([mat + "_BC" + ", " + mat + "_NM" for mat in self.materials])
+            nameSuggestions = ", ".join([mat + "_BC.png" + ", " + mat + "_NM.png" for mat in self.materials])
             addText(box, "- Your texture files should be named {} etc.".format(nameSuggestions))
 
         box = layout.box()
@@ -256,13 +256,14 @@ class TMTKHints(bpy.types.Operator):
             addText(box, "- Make sure to use the animation fixes when exporting")
             if (self.hasArmatureModifier):
                 addText(box, "- You are using an armature modifier for parenting, which is correct.")
+                addText(box, "- Make sure to create your keyframes in pose mode.")
             else:
                 addText(box, "- You are not using an armature modifier. Your animation will probably not work ingame.")
 
         box = layout.box()
         addText(box, "All object mode transformations are applied: {}".format(not self.unappliedTransforms))
         if (self.unappliedTransforms):
-            addText(box, "- Unless you specifically want this, you should explicitly apply all object mode transformations.")
+            addText(box, "- Unless you specifically want this, you should explicitly apply all object mode transformations before exporting.")
 
 
     def invoke(self, context, event):
