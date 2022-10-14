@@ -17,7 +17,9 @@ import re
 bl_info = {
     "name": "TMTK Tools",
     "blender": (2, 80, 0),
+    "location": "View3D > Object",
     "category": "Object",
+    "author": "Gohax",
     "version": (0, 2),
     "description": "Tools to make TMTK item creation easier"
 }
@@ -25,11 +27,12 @@ bl_info = {
 VERSION = bpy.app.version
 
 class TMTKLODGenerator(bpy.types.Operator):
-    bl_idname = "object.lodoperator"
+    bl_idname = "object.tmtklodoperator"
     bl_label = "TMTK Create LODs"
     bl_description = "Create LODs for selected objects"
     decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level.",default=True)
     linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies.",default=False)
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
@@ -75,6 +78,7 @@ class TMTKExporter(bpy.types.Operator):
     bl_idname = "object.tmtkexporter"
     bl_label = "Export to FBX for TMTK"
     bl_description = "Export objects to FBX file with correct settings for TMTK"
+    bl_options = {'REGISTER', 'UNDO'}
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")
     filter_glob: bpy.props.StringProperty(
         default="*.fbx",
@@ -83,6 +87,8 @@ class TMTKExporter(bpy.types.Operator):
     onlySelected: bpy.props.BoolProperty(name="Export only selected objects", default=False)
     if (USE_VISIBLE_AVAILABLE):
         onlyVisible: bpy.props.BoolProperty(name="Export only visible objects", default=False)
+    applyAnimationFix: bpy.props.BoolProperty(name="EXPERIMENTAL: Apply animation fix", default = False,
+                                              description="Apply the TMTK animation fix to all armatures.")
 
     @classmethod
     def poll(cls, context):
@@ -99,8 +105,12 @@ class TMTKExporter(bpy.types.Operator):
             "axis_forward": '-Z', "axis_up":'Y'}
             if (USE_VISIBLE_AVAILABLE):
                 exportArgs["use_visible"] = self.onlyVisible
+            if (self.applyAnimationFix):
+                targetFilter = 1 + (self.onlySelected << 1) + ((not USE_VISIBLE_AVAILABLE or self.onlyVisible) << 2)
+                bpy.ops.object.tmtkanimationfixer(targetSelection = targetFilter)
+            self.report({'INFO'}, "Started FBX export")
             bpy.ops.export_scene.fbx(**exportArgs)
-            self.report({'INFO'}, "Exported as FBX to {}".format(self.filepath))
+            self.report({'INFO'}, "Exported FBX to {}".format(self.filepath))
             return {'FINISHED'}
         else:
             return {'CANCELLED'}
@@ -109,29 +119,50 @@ class TMTKExporter(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+
+FIXEDPROP = "TMTKAnimFixed"
 class TMTKAnimationFixer(bpy.types.Operator):
     bl_idname = "object.tmtkanimationfixer"
     bl_label = "TMTK Animation Fixer"
     bl_description = "Prepare animation for export to TMTK (only use directly before exporting)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    targetSelection: bpy.props.IntProperty(default = 0)
 
     @classmethod
     def poll(cls, context):
         return (context.active_object and bpy.context.active_object.type == "ARMATURE")
 
     def execute(self, context):
-        arma = bpy.context.active_object
-
-        if (arma.type != "ARMATURE"):
-            print("Active object is not of type Armature!")
-            return {'CANCELLED'}
+        if (self.targetSelection == 0):
+            arma = bpy.context.active_object
+            if (arma.type != "ARMATURE"):
+                print("Active object is not of type Armature!")
+                return {'CANCELLED'}
+            else:
+                if (arma.animation_data == None or arma.animation_data.action == None):
+                    self.report({'WARNING'}, 'Operation cancelled as armature does not contain animation data')
+                    return{'CANCELLED'}
+                armaAction = arma.animation_data.action
+                self.scaleLocationFcurves(armaAction)
+                self.editArmature(arma)
         else:
-            if (arma.animation_data == None or arma.animation_data.action == None):
-                self.report({'WARNING'}, 'Operation cancelled as armature does not contain animation data')
-                return{'CANCELLED'}
-            armaAction = arma.animation_data.action
+            armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
+            viewLayer = bpy.context.view_layer
+            visibleFilter = ((self.targetSelection & 4) != 1)
+            selectionFilter = ((self.targetSelection & 2) != 1)
+            armafilter = lambda a: (visibleFilter == False or not a.hide_get(view_layer = viewLayer)) and (selectionFilter == False or a.select_get(view_layer = viewLayer))
+            armaTargets = [a for a in armatures if armafilter(a)]
+            for arma in armaTargets:
+                self.processSilently(context, arma)
+        return {'FINISHED'}
+
+    def processSilently(self, context, armature: bpy.types.Object):
+        assert(armature.type == "ARMATURE")
+        if not (armature.get(FIXEDPROP) == True or armature.animation_data == None or armature.animation_data.action == None):
+            armaAction = armature.animation_data.action
             self.scaleLocationFcurves(armaAction)
-            self.editArmature(arma)
-            return {'FINISHED'}
+            self.editArmature(armature)
 
     def scaleLocationFcurves(self, action : bpy.types.Action):
         for curve in action.fcurves:
@@ -150,6 +181,7 @@ class TMTKAnimationFixer(bpy.types.Operator):
             transformMatrix = Matrix.Scale(100.0, 4) @ Matrix.Rotation(-HALF_PI, 4, 'X')
             bone.transform(transformMatrix)
         bpy.ops.object.mode_set(mode="OBJECT")
+        armature["tmtk_animfixed"] = True
 
 class TMTKSubMenu(bpy.types.Menu):
     bl_idname = 'object.tmtktools'
