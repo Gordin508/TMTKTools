@@ -233,6 +233,9 @@ class TMTKHints(bpy.types.Operator):
             self.unappliedTransforms = self.unappliedTransforms or Vector((euler.x, euler.y, euler.z)) != ZEROVECTOR
         self.unappliedTransforms = self.unappliedTransforms or (active.scale != UNITYVECTOR or active.location != ZEROVECTOR)
 
+        self.tooLarge = (max(active.dimensions) > 8.0)
+        self.tooSmall = (max(active.dimensions) < 0.5 or min(active.dimensions) < 0.01)
+
 
     def draw(self, context):
         layout = self.layout
@@ -251,6 +254,18 @@ class TMTKHints(bpy.types.Operator):
             addText(box, "- Your texture files should be named {} etc.".format(nameSuggestions))
 
         box = layout.box()
+        addText(box, "All object mode transformations are applied: {}".format(not self.unappliedTransforms))
+        if (self.unappliedTransforms):
+            addText(box, "- Unless you specifically want this, you should explicitly apply all object mode transformations before exporting.")
+
+        box = layout.box()
+        addText(box, "Object has correct dimensions: {}".format(not(self.tooSmall or self.tooLarge)))
+        if (self.tooSmall):
+            addText(box, "- Smallest axis is under 0.01m or largest is under 0.5m")
+            addText(box, "- This warning may be irrelevant if you intend to combine multiple objects.")
+        if (self.tooLarge):
+            addText(box, "- Longest axis is over 8.0m")
+        box = layout.box()
         addText(box, "Object is animated: {}".format(self.hasAnimation))
         if (self.hasAnimation):
             addText(box, "- Make sure to use the animation fixes when exporting")
@@ -259,11 +274,6 @@ class TMTKHints(bpy.types.Operator):
                 addText(box, "- Make sure to create your keyframes in pose mode.")
             else:
                 addText(box, "- You are not using an armature modifier. Your animation will probably not work ingame.")
-
-        box = layout.box()
-        addText(box, "All object mode transformations are applied: {}".format(not self.unappliedTransforms))
-        if (self.unappliedTransforms):
-            addText(box, "- Unless you specifically want this, you should explicitly apply all object mode transformations before exporting.")
 
 
     def invoke(self, context, event):
