@@ -95,6 +95,22 @@ class TMTKExporter(bpy.types.Operator):
     def poll(cls, context):
         return True
 
+    def getArmatures(self, context):
+        armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
+        viewLayer = bpy.context.view_layer
+        visibleFilter = not USE_VISIBLE_AVAILABLE or self.onlyVisible
+        selectionFilter = self.onlySelected
+        armafilter = lambda a: (visibleFilter == False or not a.hide_get(view_layer = viewLayer)) and (selectionFilter == False or a.select_get(view_layer = viewLayer))
+        armaTargets = [a for a in armatures if armafilter(a)]
+        return armaTargets
+
+    def processArmature(self, context, armature: bpy.types.Object, forward = True):
+        assert(armature.type == "ARMATURE")
+        if not (armature.get(FIXEDPROP) == True or armature.animation_data == None or armature.animation_data.action == None):
+            armaAction = armature.animation_data.action
+            TMTKAnimationFixer.scaleLocationFcurves(armaAction, forward)
+            TMTKAnimationFixer.prepareArmatureForExport(armature, forward)
+
     def execute(self, context):
         if (len(self.filepath) > 0):
             if not (self.filepath.lower().endswith(".fbx")):
@@ -107,10 +123,15 @@ class TMTKExporter(bpy.types.Operator):
             if (USE_VISIBLE_AVAILABLE):
                 exportArgs["use_visible"] = self.onlyVisible
             if (self.applyAnimationFix):
-                targetFilter = 1 + (self.onlySelected << 1) + ((not USE_VISIBLE_AVAILABLE or self.onlyVisible) << 2)
-                bpy.ops.object.tmtkanimationfixer(targetSelection = targetFilter)
+                armatures = [(a, a.data) for a in self.getArmatures(context)]
+                for arma, data in armatures:
+                    arma.data = arma.data.copy()
+                    self.processArmature(context, arma)
             self.report({'INFO'}, "Started FBX export")
             bpy.ops.export_scene.fbx(**exportArgs)
+            for arma, data in armatures:
+                arma.data = data
+                TMTKAnimationFixer.scaleLocationFcurves(arma.animation_data.action, forward = False)
             self.report({'INFO'}, "Exported FBX to {}".format(self.filepath))
             return {'FINISHED'}
         else:
@@ -128,58 +149,45 @@ class TMTKAnimationFixer(bpy.types.Operator):
     bl_description = "Prepare animation for export to TMTK (only use directly before exporting)"
     bl_options = {'REGISTER', 'UNDO'}
 
-    targetSelection: bpy.props.IntProperty(default = 0)
-
     @classmethod
     def poll(cls, context):
         return (context.active_object and bpy.context.active_object.type == "ARMATURE")
 
     def execute(self, context):
-        if (self.targetSelection == 0):
-            arma = bpy.context.active_object
-            if (arma.type != "ARMATURE"):
-                print("Active object is not of type Armature!")
-                return {'CANCELLED'}
-            else:
-                if (arma.animation_data == None or arma.animation_data.action == None):
-                    self.report({'WARNING'}, 'Operation cancelled as armature does not contain animation data')
-                    return{'CANCELLED'}
-                armaAction = arma.animation_data.action
-                self.scaleLocationFcurves(armaAction)
-                self.editArmature(arma)
+        arma = bpy.context.active_object
+        if (arma.type != "ARMATURE"):
+            print("Active object is not of type Armature!")
+            return {'CANCELLED'}
         else:
-            armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
-            viewLayer = bpy.context.view_layer
-            visibleFilter = ((self.targetSelection & 4) != 1)
-            selectionFilter = ((self.targetSelection & 2) != 1)
-            armafilter = lambda a: (visibleFilter == False or not a.hide_get(view_layer = viewLayer)) and (selectionFilter == False or a.select_get(view_layer = viewLayer))
-            armaTargets = [a for a in armatures if armafilter(a)]
-            for arma in armaTargets:
-                self.processSilently(context, arma)
+            if (arma.animation_data == None or arma.animation_data.action == None):
+                self.report({'WARNING'}, 'Operation cancelled as armature does not contain animation data')
+                return{'CANCELLED'}
+            armaAction = arma.animation_data.action
+            TMTKAnimationFixer.scaleLocationFcurves(armaAction)
+            TMTKAnimationFixer.prepareArmatureForExport(arma)
+
         return {'FINISHED'}
 
-    def processSilently(self, context, armature: bpy.types.Object):
-        assert(armature.type == "ARMATURE")
-        if not (armature.get(FIXEDPROP) == True or armature.animation_data == None or armature.animation_data.action == None):
-            armaAction = armature.animation_data.action
-            self.scaleLocationFcurves(armaAction)
-            self.editArmature(armature)
-
-    def scaleLocationFcurves(self, action : bpy.types.Action):
+    @classmethod
+    def scaleLocationFcurves(cls, action : bpy.types.Action, forward = True):
         for curve in action.fcurves:
             if (curve.data_path.__contains__("location")):
                 for kfp in curve.keyframe_points:
-                    kfp.co[1] *= 100.0
-                    kfp.handle_left[1] *= 100.0
-                    kfp.handle_right[1] *= 100.0
+                    factor = 100.0 if forward else 0.01
+                    kfp.co[1] *= factor
+                    kfp.handle_left[1] *= factor
+                    kfp.handle_right[1] *= factor
 
-    def editArmature(self, armature : bpy.types.Object):
+    @classmethod
+    def prepareArmatureForExport(cls, armature : bpy.types.Object, forward = True):
         assert(bpy.context.active_object.type == "ARMATURE")
         bpy.ops.object.mode_set(mode="EDIT")
         bones = armature.data.edit_bones;
         HALF_PI = math.pi / 2.0
         for bone in bones:
-            transformMatrix = Matrix.Scale(100.0, 4) @ Matrix.Rotation(-HALF_PI, 4, 'X')
+            scaleFactor = 100.0 if forward else 0.01
+            radians = -HALF_PI if forward else HALF_PI
+            transformMatrix = Matrix.Scale(scaleFactor, 4) @ Matrix.Rotation(radians, 4, 'X')
             bone.transform(transformMatrix)
         bpy.ops.object.mode_set(mode="OBJECT")
         armature["tmtk_animfixed"] = True
