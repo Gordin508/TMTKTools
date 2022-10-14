@@ -9,7 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 """
 
 import bpy
-from mathutils import Vector
 from mathutils import Matrix
 import math
 import re
@@ -126,6 +125,9 @@ class TMTKAnimationFixer(bpy.types.Operator):
             print("Active object is not of type Armature!")
             return {'CANCELLED'}
         else:
+            if (arma.animation_data == None or arma.animation_data.action == None):
+                self.report({'WARNING'}, 'Operation cancelled as armature does not contain animation data')
+                return{'CANCELLED'}
             armaAction = arma.animation_data.action
             self.scaleLocationFcurves(armaAction)
             self.editArmature(arma)
