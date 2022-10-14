@@ -12,11 +12,12 @@ import bpy
 from mathutils import Vector
 from mathutils import Matrix
 import math
+import re
 
 
 bl_info = {
     "name": "TMTK Tools",
-    "blender": (2, 90, 0),
+    "blender": (2, 80, 0),
     "category": "Object",
     "version": (0, 2),
     "description": "Tools to make TMTK item creation easier"
@@ -27,37 +28,43 @@ VERSION = bpy.app.version
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.lodoperator"
     bl_label = "TMTK Create LODs"
-    bl_description = "Create LODs for selected object"
+    bl_description = "Create LODs for selected objects"
     decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level.",default=True)
     linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies.",default=False)
 
     @classmethod
     def poll(cls, context):
-        return (context.active_object and bpy.context.active_object.type == "MESH")
+        return (len([o for o in bpy.context.selected_objects if o.type == "MESH"]) > 0)
 
     def execute(self, context):
-        mesh = context.active_object
-        if (mesh.name.endswith("_L0")):
-            mesh.name = mesh.name.replace("_L0", "")
+        meshObjects = [o for o in bpy.context.selected_objects if o.type == "MESH"]
+        for obj in meshObjects:
+            obj.name = re.sub("_L0$", "", obj.name)
 
-        triangles = sum(len(polygon.vertices) - 2 for polygon in  mesh.data.polygons)
-        minRatio = 64.0 / triangles
-        for i in range (1,6):
-            ratios = [0.8, 0.6, 0.4, 0.2, 0.1]
-            new_obj = mesh.copy()
-            if (self.linkedcopies):
-                new_obj.data = mesh.data
-            else:
-                new_obj.data = mesh.data.copy()
-            new_obj.animation_data_clear()
-            new_obj.name = mesh.name + "_L{}".format(i)
-            bpy.context.collection.objects.link(new_obj)
-            if (self.decimate):
-                mod = new_obj.modifiers.new("LOD Decimator", "DECIMATE")
-                mod.ratio = ratios[i - 1] if ratios[i - 1] > minRatio else minRatio
+            triangles = sum(len(polygon.vertices) - 2 for polygon in obj.data.polygons)
+            minRatio = 64.0 / triangles
+            for i in range (1,6):
+                ratios = [0.8, 0.6, 0.4, 0.2, 0.1]
+                new_obj = obj.copy()
+                if (self.linkedcopies):
+                    new_obj.data = obj.data
+                else:
+                    new_obj.data = obj.data.copy()
+                new_obj.animation_data_clear()
+                new_obj.name = obj.name + "_L{}".format(i)
+                new_obj.hide_render = True
+                for coll in obj.users_collection:
+                    coll.objects.link(new_obj)
+                if (self.decimate):
+                    mod = new_obj.modifiers.new("LOD Decimator", "DECIMATE")
+                    mod.ratio = ratios[i - 1] if ratios[i - 1] > minRatio else minRatio
 
-        mesh.name = mesh.name + "_L0"
-        self.report({'INFO'}, "Created LODs for {}".format(mesh.name))
+            obj.name = obj.name + "_L0"
+
+        if (len(meshObjects) == 1):
+            self.report({'INFO'}, "Created LODs for {}".format(re.sub("_L0$", "", meshObjects[0].name)))
+        else:
+            self.report({'INFO'}, "Created LODs for {} objects".format(len(meshObjects)))
         return {'FINISHED'}
 
     def invoke(self, context, event):
