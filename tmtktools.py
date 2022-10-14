@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 import bpy
 from mathutils import Matrix
+from mathutils import Vector
 import math
 import re
 
@@ -183,6 +184,81 @@ class TMTKAnimationFixer(bpy.types.Operator):
         bpy.ops.object.mode_set(mode="OBJECT")
         armature["tmtk_animfixed"] = True
 
+class TMTKHints(bpy.types.Operator):
+    bl_idname = "object.tmtkhints"
+    bl_label = "TMTK Hints"
+    bl_description = "Give some hints about the currently selected object"
+
+    @classmethod
+    def poll(cls, context):
+        return (context.active_object and bpy.context.active_object.type == "MESH")
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+    def prepare(self, context):
+        active = context.active_object
+        self.meshname = re.sub("_L0$", "", active.name)
+        self.lods = True
+        for i in range(0,6):
+            if bpy.data.objects.get("{}_L{}".format(self.meshname, i)) == None:
+                self.lods = False
+                break
+        materialSlots = [slot for slot in active.material_slots if slot.material != None]
+        self.hasMaterial = (len(materialSlots) > 0)
+        self.materials = [slot.material.name for slot in materialSlots]
+        self.hasAnimation = (active.find_armature() != None)
+        self.hasArmatureModifier = len([mod for mod in active.modifiers if mod.type == "ARMATURE"])
+
+        UNITYVECTOR = Vector((1, 1, 1))
+        ZEROVECTOR = Vector((0, 0, 0))
+        mode = active.rotation_mode
+        self.unappliedTransforms = False
+        if (mode == "QUATERNION"):
+            self.unappliedTransforms = self.unappliedTransforms or active.rotation_quaternion != Vector((1, 0, 0 ,0))
+        else:
+            euler = active.rotation_euler
+            self.unappliedTransforms = self.unappliedTransforms or Vector((euler.x, euler.y, euler.z)) != ZEROVECTOR
+        self.unappliedTransforms = self.unappliedTransforms or (active.scale != UNITYVECTOR or active.location != ZEROVECTOR)
+
+
+    def draw(self, context):
+        layout = self.layout
+        addText = lambda box, string: box.row().label(text = string, translate = False)
+        box = layout.box()
+        addText(box, "Object has LODs: {}".format(self.lods))
+        if not (self.lods):
+            addText(box, "- You should add LODs named {} to {}".format(self.meshname + "_L0", self.meshname + "_L5"))
+
+        box = layout.box()
+        addText(box, "Object has assigned material: {}".format(self.hasMaterial))
+        if not (self.hasMaterial):
+            addText(box, "- TMTK will refuse objects without any assigned material.")
+        else:
+            nameSuggestions = ", ".join([mat + "_BC" + ", " + mat + "_NM" for mat in self.materials])
+            addText(box, "- Your texture files should be named {} etc.".format(nameSuggestions))
+
+        box = layout.box()
+        addText(box, "Object is animated: {}".format(self.hasAnimation))
+        if (self.hasAnimation):
+            addText(box, "- Make sure to use the animation fixes when exporting")
+            if (self.hasArmatureModifier):
+                addText(box, "- You are using an armature modifier for parenting, which is correct.")
+            else:
+                addText(box, "- You are not using an armature modifier. Your animation will probably not work ingame.")
+
+        box = layout.box()
+        addText(box, "All object mode transformations are applied: {}".format(not self.unappliedTransforms))
+        if (self.unappliedTransforms):
+            addText(box, "- Unless you specifically want this, you should explicitly apply all object mode transformations.")
+
+
+    def invoke(self, context, event):
+        self.prepare(context)
+        context.window_manager.invoke_popup(self, width=700)
+        return {'RUNNING_MODAL'}
+
+
 class TMTKSubMenu(bpy.types.Menu):
     bl_idname = 'object.tmtktools'
     bl_label = 'TMTK Tools'
@@ -192,6 +268,7 @@ class TMTKSubMenu(bpy.types.Menu):
         layout.operator(TMTKAnimationFixer.bl_idname)
         layout.operator(TMTKLODGenerator.bl_idname)
         layout.operator(TMTKExporter.bl_idname)
+        layout.operator(TMTKHints.bl_idname)
 
 def menu_func(self, context):
     self.layout.menu(TMTKSubMenu.bl_idname)
@@ -200,14 +277,16 @@ def register():
     bpy.utils.register_class(TMTKAnimationFixer)
     bpy.utils.register_class(TMTKLODGenerator)
     bpy.utils.register_class(TMTKExporter)
+    bpy.utils.register_class(TMTKHints)
     bpy.utils.register_class(TMTKSubMenu)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
 def unregister():
     bpy.utils.unregister_class(TMTKAnimationFixer)
-    bpy.utils.unregister_class(TMTKExporter)
-    bpy.utils.unregister_class(TMTKSubMenu)
     bpy.utils.unregister_class(TMTKLODGenerator)
+    bpy.utils.unregister_class(TMTKExporter)
+    bpy.utils.unregister_class(TMTKHints)
+    bpy.utils.unregister_class(TMTKSubMenu)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
 
 if __name__ == "__main__":
