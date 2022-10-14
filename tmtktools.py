@@ -180,7 +180,11 @@ class TMTKAnimationFixer(bpy.types.Operator):
 
     @classmethod
     def prepareArmatureForExport(cls, armature : bpy.types.Object, forward = True):
-        assert(bpy.context.active_object.type == "ARMATURE")
+        assert(armature.type == "ARMATURE")
+        for selected in bpy.context.selected_objects:
+            selected.select_set(False)
+        armature.select_set(True)
+        bpy.context.view_layer.objects.active = armature
         bpy.ops.object.mode_set(mode="EDIT")
         bones = armature.data.edit_bones;
         HALF_PI = math.pi / 2.0
