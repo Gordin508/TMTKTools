@@ -74,6 +74,7 @@ class TMTKLODGenerator(bpy.types.Operator):
         context.window_manager.invoke_props_dialog(self)
         return {'RUNNING_MODAL'}
 
+FIXEDPROP = "TMTKAnimFixed"
 USE_VISIBLE_AVAILABLE = (VERSION[0] > 3 or (VERSION[0] >= 3 and VERSION[1] >= 2))
 class TMTKExporter(bpy.types.Operator):
     bl_idname = "object.tmtkexporter"
@@ -100,7 +101,7 @@ class TMTKExporter(bpy.types.Operator):
         viewLayer = bpy.context.view_layer
         visibleFilter = not USE_VISIBLE_AVAILABLE or self.onlyVisible
         selectionFilter = self.onlySelected
-        armafilter = lambda a: (visibleFilter == False or not a.hide_get(view_layer = viewLayer)) and (selectionFilter == False or a.select_get(view_layer = viewLayer))
+        armafilter = lambda a: ((a.get(FIXEDPROP) == True) or visibleFilter == False or not a.hide_get(view_layer = viewLayer)) and (selectionFilter == False or a.select_get(view_layer = viewLayer))
         armaTargets = [a for a in armatures if armafilter(a)]
         return armaTargets
 
@@ -129,9 +130,10 @@ class TMTKExporter(bpy.types.Operator):
                     self.processArmature(context, arma)
             self.report({'INFO'}, "Started FBX export")
             bpy.ops.export_scene.fbx(**exportArgs)
-            for arma, data in armatures:
-                arma.data = data
-                TMTKAnimationFixer.scaleLocationFcurves(arma.animation_data.action, forward = False)
+            if (self.applyAnimationFix):
+                for arma, data in armatures:
+                    arma.data = data
+                    TMTKAnimationFixer.scaleLocationFcurves(arma.animation_data.action, forward = False)
             self.report({'INFO'}, "Exported FBX to {}".format(self.filepath))
             return {'FINISHED'}
         else:
@@ -141,8 +143,6 @@ class TMTKExporter(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
-
-FIXEDPROP = "TMTKAnimFixed"
 class TMTKAnimationFixer(bpy.types.Operator):
     bl_idname = "object.tmtkanimationfixer"
     bl_label = "TMTK Animation Fixer"
@@ -194,7 +194,7 @@ class TMTKAnimationFixer(bpy.types.Operator):
             transformMatrix = Matrix.Scale(scaleFactor, 4) @ Matrix.Rotation(radians, 4, 'X')
             bone.transform(transformMatrix)
         bpy.ops.object.mode_set(mode="OBJECT")
-        armature["tmtk_animfixed"] = True
+        armature[FIXEDPROP] = True
 
 class TMTKHints(bpy.types.Operator):
     bl_idname = "object.tmtkhints"
