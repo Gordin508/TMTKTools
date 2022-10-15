@@ -188,11 +188,10 @@ class TMTKAnimationFixer(bpy.types.Operator):
         bpy.context.view_layer.objects.active = armature
         bpy.ops.object.mode_set(mode="EDIT")
         bones = armature.data.edit_bones;
-        HALF_PI = math.pi / 2.0
+        scale = 100 if forward else 0.01
+        sign = -1 if forward else 1
+        transformMatrix = Matrix([(scale,0,0,0),(0,0,-sign * scale,0),(0,sign * scale,0,0),(0,0,0,1)])
         for bone in bones:
-            scale = 100 if forward else 0.01
-            sign = -1 if forward else 1
-            transformMatrix = Matrix([(scale,0,0,0),(0,0,-sign * scale,0),(0,sign * scale,0,0),(0,0,0,1)])
             bone.transform(transformMatrix)
         bpy.ops.object.mode_set(mode="OBJECT")
         armature.select_set(False)
