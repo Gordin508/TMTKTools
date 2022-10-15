@@ -90,7 +90,7 @@ class TMTKExporter(bpy.types.Operator):
     onlySelected: bpy.props.BoolProperty(name="Export only selected objects", default=False)
     if (USE_VISIBLE_AVAILABLE):
         onlyVisible: bpy.props.BoolProperty(name="Export only visible objects", default=False)
-    applyAnimationFix: bpy.props.BoolProperty(name="EXPERIMENTAL: Apply animation fix", default = False,
+    applyAnimationFix: bpy.props.BoolProperty(name="Apply animation fix", default = True,
                                               description="Apply the TMTK animation fix to all armatures.")
 
     @classmethod
@@ -190,9 +190,9 @@ class TMTKAnimationFixer(bpy.types.Operator):
         bones = armature.data.edit_bones;
         HALF_PI = math.pi / 2.0
         for bone in bones:
-            scaleFactor = 100.0 if forward else 0.01
-            radians = -HALF_PI if forward else HALF_PI
-            transformMatrix = Matrix.Scale(scaleFactor, 4) @ Matrix.Rotation(radians, 4, 'X')
+            scale = 100 if forward else 0.01
+            sign = -1 if forward else 1
+            transformMatrix = Matrix([(scale,0,0,0),(0,0,-sign * scale,0),(0,sign * scale,0,0),(0,0,0,1)])
             bone.transform(transformMatrix)
         bpy.ops.object.mode_set(mode="OBJECT")
         armature.select_set(False)
