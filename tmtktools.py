@@ -46,6 +46,7 @@ class TMTKLODGenerator(bpy.types.Operator):
 
             triangles = sum(len(polygon.vertices) - 2 for polygon in obj.data.polygons)
             minRatio = 64.0 / triangles
+            minRatio = minRatio if minRatio <= 1.0 else 1.0
             for i in range (1,6):
                 ratios = [0.8, 0.6, 0.4, 0.2, 0.1]
                 new_obj = obj.copy()
@@ -124,16 +125,14 @@ class TMTKExporter(bpy.types.Operator):
             if (USE_VISIBLE_AVAILABLE):
                 exportArgs["use_visible"] = self.onlyVisible
             if (self.applyAnimationFix):
-                armatures = [(a, a.data) for a in self.getArmatures(context)]
-                for arma, data in armatures:
-                    arma.data = arma.data.copy()
+                armatures = self.getArmatures(context)
+                for arma in armatures:
                     self.processArmature(context, arma)
             self.report({'INFO'}, "Started FBX export")
             bpy.ops.export_scene.fbx(**exportArgs)
             if (self.applyAnimationFix):
-                for arma, data in armatures:
-                    arma.data = data
-                    TMTKAnimationFixer.scaleLocationFcurves(arma.animation_data.action, forward = False)
+                for arma in armatures:
+                    self.processArmature(context, arma, forward = False)
             self.report({'INFO'}, "Exported FBX to {}".format(self.filepath))
             return {'FINISHED'}
         else:
@@ -165,7 +164,7 @@ class TMTKAnimationFixer(bpy.types.Operator):
             armaAction = arma.animation_data.action
             TMTKAnimationFixer.scaleLocationFcurves(armaAction)
             TMTKAnimationFixer.prepareArmatureForExport(arma)
-
+            arma[FIXEDPROP] = True
         return {'FINISHED'}
 
     @classmethod
@@ -181,7 +180,9 @@ class TMTKAnimationFixer(bpy.types.Operator):
     @classmethod
     def prepareArmatureForExport(cls, armature : bpy.types.Object, forward = True):
         assert(armature.type == "ARMATURE")
-        for selected in bpy.context.selected_objects:
+        originalSelected = bpy.context.selected_objects
+        originalActive = bpy.context.view_layer.objects.active
+        for selected in originalSelected:
             selected.select_set(False)
         armature.select_set(True)
         bpy.context.view_layer.objects.active = armature
@@ -194,7 +195,10 @@ class TMTKAnimationFixer(bpy.types.Operator):
             transformMatrix = Matrix.Scale(scaleFactor, 4) @ Matrix.Rotation(radians, 4, 'X')
             bone.transform(transformMatrix)
         bpy.ops.object.mode_set(mode="OBJECT")
-        armature[FIXEDPROP] = True
+        armature.select_set(False)
+        for selected in originalSelected:
+            selected.select_set(True)
+        bpy.context.view_layer.objects.active = originalActive
 
 class TMTKHints(bpy.types.Operator):
     bl_idname = "object.tmtkhints"
@@ -210,7 +214,7 @@ class TMTKHints(bpy.types.Operator):
 
     def prepare(self, context):
         active = context.active_object
-        self.meshname = re.sub("_L0$", "", active.name)
+        self.meshname = re.sub("_L[0-5]$", "", active.name)
         self.lods = True
         for i in range(0,6):
             if bpy.data.objects.get("{}_L{}".format(self.meshname, i)) == None:
