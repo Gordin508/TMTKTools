@@ -194,7 +194,10 @@ class TMTKAnimationFixer(bpy.types.Operator):
         for bone in bones:
             if not (bone.use_connect):
                 bone.head = transformMatrix @ bone.head
+                bone.head_radius = scale * bone.head_radius
             bone.tail = transformMatrix @ bone.tail
+            bone.tail_radius = scale * bone.tail_radius
+            bone.envelope_distance = scale * bone.envelope_distance
         bpy.ops.object.mode_set(mode="OBJECT")
         armature.select_set(False)
         for selected in originalSelected:
