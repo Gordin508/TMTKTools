@@ -191,13 +191,15 @@ class TMTKAnimationFixer(bpy.types.Operator):
         scale = 100 if forward else 0.01
         sign = -1 if forward else 1
         transformMatrix = Matrix([(scale,0,0,0),(0,0,-sign * scale,0),(0,sign * scale,0,0),(0,0,0,1)])
+        PROPTY = "restore_Connect"
         for bone in bones:
-            if not (bone.use_connect):
-                bone.head = transformMatrix @ bone.head
-                bone.head_radius = scale * bone.head_radius
-            bone.tail = transformMatrix @ bone.tail
-            bone.tail_radius = scale * bone.tail_radius
-            bone.envelope_distance = scale * bone.envelope_distance
+            bone[PROPTY] = bone.use_connect
+            bone.use_connect = False
+        for bone in bones:
+            bone.transform(transformMatrix)
+        for bone in bones:
+            bone.use_connect = bone[PROPTY]
+            del bone[PROPTY]
         bpy.ops.object.mode_set(mode="OBJECT")
         armature.select_set(False)
         for selected in originalSelected:
