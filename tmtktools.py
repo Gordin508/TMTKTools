@@ -21,7 +21,7 @@ bl_info = {
     "location": "View3D > Object",
     "category": "Object",
     "author": "Gohax",
-    "version": (0, 2),
+    "version": (0, 2, 1),
     "description": "Tools to make TMTK item creation easier"
 }
 
@@ -192,7 +192,9 @@ class TMTKAnimationFixer(bpy.types.Operator):
         sign = -1 if forward else 1
         transformMatrix = Matrix([(scale,0,0,0),(0,0,-sign * scale,0),(0,sign * scale,0,0),(0,0,0,1)])
         for bone in bones:
-            bone.transform(transformMatrix)
+            if not (bone.use_connect):
+                bone.head = transformMatrix @ bone.head
+            bone.tail = transformMatrix @ bone.tail
         bpy.ops.object.mode_set(mode="OBJECT")
         armature.select_set(False)
         for selected in originalSelected:
