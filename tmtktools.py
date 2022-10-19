@@ -270,14 +270,14 @@ class TMTKHints(bpy.types.Operator):
         box = layout.box()
         addText(box, "All object mode transformations are applied: {}".format(not self.unappliedTransforms))
         if (self.unappliedTransforms):
-            addText(box, "- Unless you specifically want this, you should explicitly apply all object mode transformations before exporting.")
+            addText(box, "- Unless this is intended, you should explicitly apply all object mode transformations before exporting.")
 
         box = layout.box()
         addText(box, "Object has correct dimensions: {}".format(not(self.tooSmall or self.tooLarge)))
         if (self.tooSmall or self.tooLarge):
             addText(box, "- Object dimensions: {:0.3f}m, {:0.3f}m, {:0.3f}m (x, y, z)".format(self.dimensions[0], self.dimensions[1], self.dimensions[2]))
-            if (self.unit_scale != 1.0):
-                addText(box, "- I recommend working with the default unit scale of 1.0 (currently is {:0.2f})".format(self.unit_scale))
+        if (self.unit_scale != 1.0):
+            addText(box, "- Info: Scene unit scale is {:0.2f}".format(self.unit_scale))
         if (self.tooSmall):
             addText(box, "- Smallest axis is under 0.01m or largest is under 0.5m")
             addText(box, "- This warning may be irrelevant if you intend to combine multiple objects.")
