@@ -21,7 +21,7 @@ bl_info = {
     "location": "View3D > Object",
     "category": "Object",
     "author": "Gohax",
-    "version": (0, 2, 1),
+    "version": (0, 2, 2),
     "description": "Tools to make TMTK item creation easier"
 }
 
@@ -92,6 +92,8 @@ class TMTKExporter(bpy.types.Operator):
         onlyVisible: bpy.props.BoolProperty(name="Export only visible objects", default=False)
     applyAnimationFix: bpy.props.BoolProperty(name="Apply animation fix", default = True,
                                               description="Apply the TMTK animation fix to all armatures.")
+    addLeafBones: bpy.props.BoolProperty(name="Add Leaf Bones", default = False,
+                                        description="Enable this if you intend to edit the armature from exported data")
 
     @classmethod
     def poll(cls, context):
@@ -121,7 +123,8 @@ class TMTKExporter(bpy.types.Operator):
             "object_types": {"ARMATURE","MESH"},
             "bake_space_transform": True,
             "use_selection": self.onlySelected,
-            "axis_forward": '-Z', "axis_up":'Y'}
+            "axis_forward": '-Z', "axis_up":'Y',
+            "add_leaf_bones": self.addLeafBones}
             if (USE_VISIBLE_AVAILABLE):
                 exportArgs["use_visible"] = self.onlyVisible
             if (self.applyAnimationFix):
@@ -243,9 +246,10 @@ class TMTKHints(bpy.types.Operator):
             self.unappliedTransforms = self.unappliedTransforms or Vector((euler.x, euler.y, euler.z)) != ZEROVECTOR
         self.unappliedTransforms = self.unappliedTransforms or (active.scale != UNITYVECTOR or active.location != ZEROVECTOR)
 
-        self.tooLarge = (max(active.dimensions) > 8.0)
-        self.tooSmall = (max(active.dimensions) < 0.5 or min(active.dimensions) < 0.01)
-
+        self.unit_scale = bpy.context.scene.unit_settings.scale_length
+        self.dimensions = active.dimensions * self.unit_scale
+        self.tooLarge = (max(self.dimensions) > 8.0)
+        self.tooSmall = (max(self.dimensions) < 0.5 or min(self.dimensions) < 0.01)
 
     def draw(self, context):
         layout = self.layout
@@ -270,6 +274,10 @@ class TMTKHints(bpy.types.Operator):
 
         box = layout.box()
         addText(box, "Object has correct dimensions: {}".format(not(self.tooSmall or self.tooLarge)))
+        if (self.tooSmall or self.tooLarge):
+            addText(box, "- Object dimensions: {:0.3f}m, {:0.3f}m, {:0.3f}m (x, y, z)".format(self.dimensions[0], self.dimensions[1], self.dimensions[2]))
+            if (self.unit_scale != 1.0):
+                addText(box, "- I recommend working with the default unit scale of 1.0 (currently is {:0.2f})".format(self.unit_scale))
         if (self.tooSmall):
             addText(box, "- Smallest axis is under 0.01m or largest is under 0.5m")
             addText(box, "- This warning may be irrelevant if you intend to combine multiple objects.")
