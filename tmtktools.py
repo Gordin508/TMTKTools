@@ -27,6 +27,8 @@ bl_info = {
 
 VERSION = bpy.app.version
 
+TRIANGLE_LIMIT = 8000
+
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.tmtklodoperator"
     bl_label = "TMTK Create LODs"
@@ -305,9 +307,9 @@ class TMTKHints(bpy.types.Operator):
             addText(box, "- Longest axis is over 8.0m")
 
         box = layout.box()
-        addText(box, "Object fulfills triangle limit: {}".format(self.triCount <= 8000))
-        if (self.triCount > 8000):
-            addText(box, "Object has {} triangles (allowed: {})".format(self.triCount, 8000))
+        addText(box, "Object is within triangle limit ({}): {}".format(TRIANGLE_LIMIT, self.triCount <= TRIANGLE_LIMIT))
+        if (self.triCount > TRIANGLE_LIMIT):
+            addText(box, "Object has {} triangles (allowed: {})".format(self.triCount, TRIANGLE_LIMIT))
         box = layout.box()
         addText(box, "Object is animated: {}".format(self.hasAnimation))
         if (self.hasAnimation):
