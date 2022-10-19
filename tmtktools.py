@@ -225,10 +225,25 @@ class TMTKHints(bpy.types.Operator):
         active = context.active_object
         self.meshname = re.sub("_L[0-5]$", "", active.name)
         self.lods = True
+        self.lodTriCounts = []
+        deps = bpy.context.evaluated_depsgraph_get()
         for i in range(0,6):
-            if bpy.data.objects.get("{}_L{}".format(self.meshname, i)) == None:
+            lod = bpy.data.objects.get("{}_L{}".format(self.meshname, i))
+            if lod == None:
                 self.lods = False
                 break
+            else:
+                eval = lod.evaluated_get(deps)
+                eval.data.calc_loop_triangles()
+                self.lodTriCounts.append(len(eval.data.loop_triangles))
+        self.lodOrderError = -1
+        if (self.lods):
+            for i in range(0,5):
+                if (self.lodTriCounts[i + 1] > self.lodTriCounts[i]):
+                    self.lodOrderError = i
+        selfEval = active.evaluated_get(deps)
+        selfEval.data.calc_loop_triangles()
+        self.triCount = len(selfEval.data.loop_triangles)
         materialSlots = [slot for slot in active.material_slots if slot.material != None]
         self.hasMaterial = (len(materialSlots) > 0)
         self.materials = [slot.material.name for slot in materialSlots]
@@ -256,7 +271,12 @@ class TMTKHints(bpy.types.Operator):
         addText = lambda box, string: box.row().label(text = string, translate = False)
         box = layout.box()
         addText(box, "Object has LODs: {}".format(self.lods))
-        if not (self.lods):
+        if (self.lods):
+            if (self.lodOrderError >= 0):
+                e = self.lodOrderError
+                addText(box, "- LODs are out of order: L{} ({} triangles) is less detailed than L{} ({} triangles)."
+                                .format(e, self.lodTriCounts[e], e + 1, self.lodTriCounts[e + 1]))
+        else:
             addText(box, "- You should add LODs named {} to {}".format(self.meshname + "_L0", self.meshname + "_L5"))
 
         box = layout.box()
@@ -283,6 +303,11 @@ class TMTKHints(bpy.types.Operator):
             addText(box, "- This warning may be irrelevant if you intend to combine multiple objects.")
         if (self.tooLarge):
             addText(box, "- Longest axis is over 8.0m")
+
+        box = layout.box()
+        addText(box, "Object fulfills triangle limit: {}".format(self.triCount <= 8000))
+        if (self.triCount > 8000):
+            addText(box, "Object has {} triangles (allowed: {})".format(self.triCount, 8000))
         box = layout.box()
         addText(box, "Object is animated: {}".format(self.hasAnimation))
         if (self.hasAnimation):
