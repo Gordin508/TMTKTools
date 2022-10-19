@@ -309,7 +309,7 @@ class TMTKHints(bpy.types.Operator):
         box = layout.box()
         addText(box, "Object is within triangle limit ({}): {}".format(TRIANGLE_LIMIT, self.triCount <= TRIANGLE_LIMIT))
         if (self.triCount > TRIANGLE_LIMIT):
-            addText(box, "Object has {} triangles (allowed: {})".format(self.triCount, TRIANGLE_LIMIT))
+            addText(box, "- Object has {} triangles".format(self.triCount, TRIANGLE_LIMIT))
         box = layout.box()
         addText(box, "Object is animated: {}".format(self.hasAnimation))
         if (self.hasAnimation):
