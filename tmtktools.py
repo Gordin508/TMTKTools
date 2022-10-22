@@ -175,10 +175,10 @@ class TMTKAnimationFixer(bpy.types.Operator):
     @classmethod
     def scaleLocationFcurves(cls, action : bpy.types.Action, forward = True):
         unitScale = bpy.context.scene.unit_settings.scale_length
+        factor = (100.0 * unitScale) if forward else (0.01 / unitScale)
         for curve in action.fcurves:
             if (curve.data_path.__contains__("location")):
                 for kfp in curve.keyframe_points:
-                    factor = (100.0 * unitScale) if forward else (0.01 / unitScale)
                     kfp.co[1] *= factor
                     kfp.handle_left[1] *= factor
                     kfp.handle_right[1] *= factor
