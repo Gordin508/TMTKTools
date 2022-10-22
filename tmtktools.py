@@ -21,7 +21,7 @@ bl_info = {
     "location": "View3D > Object",
     "category": "Object",
     "author": "Gohax",
-    "version": (0, 2, 2),
+    "version": (0, 2, 3),
     "description": "Tools to make TMTK item creation easier"
 }
 
@@ -174,10 +174,11 @@ class TMTKAnimationFixer(bpy.types.Operator):
 
     @classmethod
     def scaleLocationFcurves(cls, action : bpy.types.Action, forward = True):
+        unitScale = bpy.context.scene.unit_settings.scale_length
         for curve in action.fcurves:
             if (curve.data_path.__contains__("location")):
                 for kfp in curve.keyframe_points:
-                    factor = 100.0 if forward else 0.01
+                    factor = (100.0 * unitScale) if forward else (0.01 / unitScale)
                     kfp.co[1] *= factor
                     kfp.handle_left[1] *= factor
                     kfp.handle_right[1] *= factor
@@ -192,8 +193,9 @@ class TMTKAnimationFixer(bpy.types.Operator):
         armature.select_set(True)
         bpy.context.view_layer.objects.active = armature
         bpy.ops.object.mode_set(mode="EDIT")
-        bones = armature.data.edit_bones;
-        scale = 100 if forward else 0.01
+        bones = armature.data.edit_bones
+        unitScale = bpy.context.scene.unit_settings.scale_length
+        scale = (100 * unitScale) if forward else (0.01 / unitScale)
         sign = -1 if forward else 1
         transformMatrix = Matrix([(scale,0,0,0),(0,0,-sign * scale,0),(0,sign * scale,0,0),(0,0,0,1)])
         PROPTY = "restore_Connect"
