@@ -21,7 +21,7 @@ bl_info = {
     "location": "View3D > Object",
     "category": "Object",
     "author": "Gohax",
-    "version": (0, 2, 3),
+    "version": (0, 2, 4),
     "description": "Tools to make TMTK item creation easier"
 }
 
@@ -213,6 +213,110 @@ class TMTKAnimationFixer(bpy.types.Operator):
             selected.select_set(True)
         bpy.context.view_layer.objects.active = originalActive
 
+MAXINFLUENCERS = 4
+PRECISION = 12
+class TMTKNormalizeWeights(bpy.types.Operator):
+    bl_idname = "object.tmtknormalizeoperator"
+    bl_label = "TMTK Normalize Bone Weights"
+    bl_description = "Normalize Vertex Group Weights more precisely than Blender's Normalization would"
+    bl_options = {'REGISTER', 'UNDO'}
+    forceAll: bpy.props.BoolProperty(name="Re-Normalize all vertices", default = False,
+                                        description="Do not check whether vertices are already normalized")
+    applyMods: bpy.props.BoolProperty(name="Apply Modifiers", default = False,
+                                        description="Permanently apply modifier stack before normalizing (except armature)")
+
+    @classmethod
+    def poll(cls, context):
+        return (context.active_object and bpy.context.active_object.type == "MESH")
+
+    def calculateSum(self, v):
+        sum = 0.0
+        for g in v.groups:
+            sum += g.weight
+        return sum
+
+    def applyModifiers(self, obj):
+        if (not self.applyMods or obj.type != "MESH" or len(obj.modifiers) == 0):
+            return
+        originalSelected = bpy.context.selected_objects
+        originalActive = bpy.context.view_layer.objects.active
+        for selected in originalSelected:
+            selected.select_set(False)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        mods = [mod for mod in obj.modifiers if mod.type != "ARMATURE"]
+        for mod in mods:
+            bpy.ops.object.modifier_apply(modifier = mod.name)
+
+        obj.select_set(False)
+        for selected in originalSelected:
+            selected.select_set(True)
+        bpy.context.view_layer.objects.active = originalActive
+        bpy.context.view_layer.objects.active = originalActive
+
+    def fixWeights(self, obj):
+        fixedVerts = 0
+        for v in obj.data.vertices:
+            index = v.index
+            if (len(v.groups) == 0):
+                continue
+            elif (len(v.groups) > 4):
+                groupsSorted = sorted(v.groups, key = lambda g: g.weight, reverse = True)
+                for g in groupsSorted[4:]:
+                    obj.vertex_groups[g.group].remove([v.index])
+            v = obj.data.vertices[index]
+            wsum = self.calculateSum(v)
+
+            if (wsum == 1.0 and not self.forceAll):
+                continue
+
+            fixedVerts += 1
+
+            for g in v.groups:
+                newWeight = g.weight / wsum
+                newWeight = int(newWeight * 2**PRECISION) * 2**(-PRECISION)
+                g.weight = newWeight
+
+            sortedIndices = sorted([i for i in range(0, len(v.groups))], key = lambda ind: v.groups[ind].weight, reverse = True)
+            v.groups[sortedIndices[0]].weight = 1.0 - sum([v.groups[i].weight for i in sortedIndices[1:]])
+
+            for g in v.groups:
+                if g.weight == 0.0:
+                    obj.vertex_groups[g.group].remove([v.index])
+
+        return fixedVerts
+
+    def execute(self, context):
+        foundUnapplied = False
+        fixedVerts = 0
+        warning = " Warning: At least one object had unapplied modifiers."
+        selection = bpy.context.selected_objects
+        for o in selection:
+            if (o.type != "MESH"):
+                continue
+            if (self.applyMods):
+                self.applyModifiers(o)
+            if len([m for m in o.modifiers if m.type != "ARMATURE"]) > 0:
+                foundUnapplied = True
+            fixedVerts += self.fixWeights(o)
+        if not (foundUnapplied):
+            warning = ""
+        self.report({'INFO'}, "Adjusted weights of {} vertices.{}".format(fixedVerts, warning))
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.invoke_props_dialog(self)
+        return {'RUNNING_MODAL'}
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        col.label(text="Make sure all relevant modifiers are applied.")
+        row = col.row()
+        row.prop(self, "forceAll")
+        row.prop(self, "applyMods")
+
+
 class TMTKHints(bpy.types.Operator):
     bl_idname = "object.tmtkhints"
     bl_label = "TMTK Hints"
@@ -339,6 +443,7 @@ class TMTKSubMenu(bpy.types.Menu):
         layout.operator(TMTKLODGenerator.bl_idname)
         layout.operator(TMTKExporter.bl_idname)
         layout.operator(TMTKHints.bl_idname)
+        layout.operator(TMTKNormalizeWeights.bl_idname)
 
 def menu_func(self, context):
     self.layout.menu(TMTKSubMenu.bl_idname)
@@ -348,6 +453,7 @@ def register():
     bpy.utils.register_class(TMTKLODGenerator)
     bpy.utils.register_class(TMTKExporter)
     bpy.utils.register_class(TMTKHints)
+    bpy.utils.register_class(TMTKNormalizeWeights)
     bpy.utils.register_class(TMTKSubMenu)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
@@ -356,6 +462,7 @@ def unregister():
     bpy.utils.unregister_class(TMTKLODGenerator)
     bpy.utils.unregister_class(TMTKExporter)
     bpy.utils.unregister_class(TMTKHints)
+    bpy.utils.unregister_class(TMTKNormalizeWeights)
     bpy.utils.unregister_class(TMTKSubMenu)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
 
