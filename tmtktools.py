@@ -31,7 +31,7 @@ TRIANGLE_LIMIT = 8000
 
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.tmtklodoperator"
-    bl_label = "TMTK Create LODs"
+    bl_label = "TMTK: Create LODs"
     bl_description = "Create LODs for selected objects"
     decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level.",default=True)
     linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies.",default=False)
@@ -81,7 +81,7 @@ FIXEDPROP = "TMTKAnimFixed"
 USE_VISIBLE_AVAILABLE = (VERSION[0] > 3 or (VERSION[0] >= 3 and VERSION[1] >= 2))
 class TMTKExporter(bpy.types.Operator):
     bl_idname = "object.tmtkexporter"
-    bl_label = "Export to FBX for TMTK"
+    bl_label = "TMTK: Export to FBX"
     bl_description = "Export objects to FBX file with correct settings for TMTK"
     bl_options = {'REGISTER', 'UNDO'}
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")
@@ -149,7 +149,7 @@ class TMTKExporter(bpy.types.Operator):
 
 class TMTKAnimationFixer(bpy.types.Operator):
     bl_idname = "object.tmtkanimationfixer"
-    bl_label = "TMTK Animation Fixer"
+    bl_label = "TMTK: Animation Fixer"
     bl_description = "Prepare animation for export to TMTK (only use directly before exporting)"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -217,7 +217,7 @@ MAXINFLUENCERS = 4
 PRECISION = 12
 class TMTKNormalizeWeights(bpy.types.Operator):
     bl_idname = "object.tmtknormalizeoperator"
-    bl_label = "TMTK Normalize Bone Weights"
+    bl_label = "TMTK: Normalize Bone Weights"
     bl_description = "Normalize Vertex Group Weights more precisely than Blender's Normalization would"
     bl_options = {'REGISTER', 'UNDO'}
     forceAll: bpy.props.BoolProperty(name="Re-Normalize all vertices", default = False,
@@ -319,7 +319,7 @@ class TMTKNormalizeWeights(bpy.types.Operator):
 
 class TMTKHints(bpy.types.Operator):
     bl_idname = "object.tmtkhints"
-    bl_label = "TMTK Hints"
+    bl_label = "TMTK: Hints"
     bl_description = "Give some hints about the currently selected object"
 
     @classmethod
