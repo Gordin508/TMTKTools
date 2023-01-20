@@ -21,7 +21,7 @@ bl_info = {
     "location": "View3D > Object",
     "category": "Object",
     "author": "Gohax",
-    "version": (0, 2, 4),
+    "version": (0, 2, 5),
     "description": "Tools to make TMTK item creation easier"
 }
 
@@ -260,11 +260,14 @@ class TMTKNormalizeWeights(bpy.types.Operator):
             index = v.index
             if (len(v.groups) == 0):
                 continue
-            elif (len(v.groups) > 4):
+            if (len(v.groups) > MAXINFLUENCERS):
                 groupsSorted = sorted(v.groups, key = lambda g: g.weight, reverse = True)
-                for g in groupsSorted[4:]:
-                    obj.vertex_groups[g.group].remove([v.index])
+                groupIDs = [g.group for g in groupsSorted[MAXINFLUENCERS:]]
+                for gid in groupIDs:
+                    obj.vertex_groups[gid].remove([v.index])
+
             v = obj.data.vertices[index]
+            assert(len(v.groups) <= MAXINFLUENCERS)
             wsum = self.calculateSum(v)
 
             if (wsum == 1.0 and not self.forceAll):
@@ -280,9 +283,9 @@ class TMTKNormalizeWeights(bpy.types.Operator):
             sortedIndices = sorted([i for i in range(0, len(v.groups))], key = lambda ind: v.groups[ind].weight, reverse = True)
             v.groups[sortedIndices[0]].weight = 1.0 - sum([v.groups[i].weight for i in sortedIndices[1:]])
 
-            for g in v.groups:
-                if g.weight == 0.0:
-                    obj.vertex_groups[g.group].remove([v.index])
+            zeroGroups = [g.group for g in v.groups if g.weight == 0]
+            for zgid in zeroGroups:
+                obj.vertex_groups[zgid].remove([v.index])
 
         return fixedVerts
 
