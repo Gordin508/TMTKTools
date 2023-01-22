@@ -34,6 +34,7 @@ class TMTKLODGenerator(bpy.types.Operator):
     bl_label = "TMTK: Create LODs"
     bl_description = "Create LODs for selected objects"
     decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level.",default=True)
+    decimateBeforeArma: bpy.props.BoolProperty(name="Decimate before Armature", description = "If an armature modifier is present, move decimate modifier above it in the modifier stack (recommended)", default = True)
     linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies.",default=False)
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -62,8 +63,12 @@ class TMTKLODGenerator(bpy.types.Operator):
                 for coll in obj.users_collection:
                     coll.objects.link(new_obj)
                 if (self.decimate):
-                    mod = new_obj.modifiers.new("LOD Decimator", "DECIMATE")
+                    modName = "LOD Decimator L{}".format(i)
+                    mod = new_obj.modifiers.new(modName, "DECIMATE")
                     mod.ratio = ratios[i - 1] if ratios[i - 1] > minRatio else minRatio
+                    armaMods = [i for i in range(0, len(new_obj.modifiers)) if new_obj.modifiers[i].type == "ARMATURE"]
+                    if (self.decimateBeforeArma and len(armaMods) != 0):
+                        bpy.ops.object.modifier_move_to_index({'object': new_obj}, modifier = modName, index = armaMods[0])
 
             obj.name = obj.name + "_L0"
 
@@ -76,6 +81,17 @@ class TMTKLODGenerator(bpy.types.Operator):
     def invoke(self, context, event):
         context.window_manager.invoke_props_dialog(self)
         return {'RUNNING_MODAL'}
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        row = col.row()
+        row.prop(self, "decimate")
+        row = col.row()
+        row.prop(self, "decimateBeforeArma")
+        row.enabled = self.decimate
+        row = col.row()
+        row.prop(self, "linkedcopies")
 
 FIXEDPROP = "TMTKAnimFixed"
 USE_VISIBLE_AVAILABLE = (VERSION[0] > 3 or (VERSION[0] >= 3 and VERSION[1] >= 2))
@@ -238,21 +254,10 @@ class TMTKNormalizeWeights(bpy.types.Operator):
     def applyModifiers(self, obj):
         if (not self.applyMods or obj.type != "MESH" or len(obj.modifiers) == 0):
             return
-        originalSelected = bpy.context.selected_objects
-        originalActive = bpy.context.view_layer.objects.active
-        for selected in originalSelected:
-            selected.select_set(False)
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
+
         mods = [mod for mod in obj.modifiers if mod.type != "ARMATURE"]
         for mod in mods:
-            bpy.ops.object.modifier_apply(modifier = mod.name)
-
-        obj.select_set(False)
-        for selected in originalSelected:
-            selected.select_set(True)
-        bpy.context.view_layer.objects.active = originalActive
-        bpy.context.view_layer.objects.active = originalActive
+            bpy.ops.object.modifier_apply({'object': obj}, modifier = mod.name)
 
     def fixWeights(self, obj):
         fixedVerts = 0
