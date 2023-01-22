@@ -12,6 +12,7 @@ import bpy
 from mathutils import Matrix
 from mathutils import Vector
 import math
+import os
 import re
 
 
@@ -161,6 +162,12 @@ class TMTKExporter(bpy.types.Operator):
             return {'CANCELLED'}
 
     def invoke(self, context, event):
+        if (len(self.filepath) == 0):
+            project_name = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
+            if (len(project_name) > 0):
+                self.filepath = project_name + ".fbx"
+            else:
+                self.filepath = "export.fbx"
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
