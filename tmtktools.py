@@ -22,7 +22,7 @@ bl_info = {
     "location": "View3D > Object",
     "category": "Object",
     "author": "Gohax",
-    "version": (0, 2, 5),
+    "version": (0, 2, 6),
     "description": "Tools to make TMTK item creation easier"
 }
 
@@ -34,9 +34,9 @@ class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.tmtklodoperator"
     bl_label = "TMTK: Create LODs"
     bl_description = "Create LODs for selected objects"
-    decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level.",default=True)
+    decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level",default=True)
     decimateBeforeArma: bpy.props.BoolProperty(name="Decimate before Armature", description = "If an armature modifier is present, move decimate modifier above it in the modifier stack (recommended)", default = True)
-    linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies.",default=False)
+    linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies",default=False)
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -111,7 +111,7 @@ class TMTKExporter(bpy.types.Operator):
     if (USE_VISIBLE_AVAILABLE):
         onlyVisible: bpy.props.BoolProperty(name="Export only visible objects", default=False)
     applyAnimationFix: bpy.props.BoolProperty(name="Apply animation fix", default = True,
-                                              description="Apply the TMTK animation fix to all armatures.")
+                                              description="Apply the TMTK animation fix to all armatures")
     addLeafBones: bpy.props.BoolProperty(name="Add Leaf Bones", default = False,
                                         description="Enable this if you intend to edit the armature from exported data")
 
@@ -164,10 +164,8 @@ class TMTKExporter(bpy.types.Operator):
     def invoke(self, context, event):
         if (len(self.filepath) == 0):
             project_name = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
-            if (len(project_name) > 0):
-                self.filepath = project_name + ".fbx"
-            else:
-                self.filepath = "export.fbx"
+            project_name = project_name if len(project_name) > 0 else "untitled"
+            self.filepath = project_name + ".fbx"
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
