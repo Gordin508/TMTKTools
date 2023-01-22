@@ -88,6 +88,7 @@ class TMTKLODGenerator(bpy.types.Operator):
         row = col.row()
         row.prop(self, "decimate")
         row = col.row()
+        row.separator()
         row.prop(self, "decimateBeforeArma")
         row.enabled = self.decimate
         row = col.row()
