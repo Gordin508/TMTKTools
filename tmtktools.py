@@ -136,30 +136,31 @@ class TMTKExporter(bpy.types.Operator):
             TMTKAnimationFixer.prepareArmatureForExport(armature, forward)
 
     def execute(self, context):
-        if (len(self.filepath) > 0):
-            if not (self.filepath.lower().endswith(".fbx")):
-                self.filepath = self.filepath + ".fbx"
-            exportArgs = {"filepath": self.filepath,
-            "object_types": {"ARMATURE","MESH"},
-            "bake_space_transform": True,
-            "use_selection": self.onlySelected,
-            "axis_forward": '-Z', "axis_up":'Y',
-            "add_leaf_bones": self.addLeafBones}
-            if (USE_VISIBLE_AVAILABLE):
-                exportArgs["use_visible"] = self.onlyVisible
-            if (self.applyAnimationFix):
-                armatures = self.getArmatures(context)
-                for arma in armatures:
-                    self.processArmature(context, arma)
-            self.report({'INFO'}, "Started FBX export")
-            bpy.ops.export_scene.fbx(**exportArgs)
-            if (self.applyAnimationFix):
-                for arma in armatures:
-                    self.processArmature(context, arma, forward = False)
-            self.report({'INFO'}, "Exported FBX to {}".format(self.filepath))
-            return {'FINISHED'}
-        else:
+        if (len(os.path.basename(self.filepath)) == 0):
+            self.report({'WARNING'}, 'Cancelled FBX Export: Empty filename not allowed')
             return {'CANCELLED'}
+        if not (self.filepath.lower().endswith(".fbx")):
+            self.filepath = self.filepath + ".fbx"
+        exportArgs = {"filepath": self.filepath,
+        "object_types": {"ARMATURE","MESH"},
+        "bake_space_transform": True,
+        "use_selection": self.onlySelected,
+        "axis_forward": '-Z', "axis_up":'Y',
+        "add_leaf_bones": self.addLeafBones}
+        if (USE_VISIBLE_AVAILABLE):
+            exportArgs["use_visible"] = self.onlyVisible
+        if (self.applyAnimationFix):
+            armatures = self.getArmatures(context)
+            for arma in armatures:
+                self.processArmature(context, arma)
+        self.report({'INFO'}, "Started FBX export")
+        bpy.ops.export_scene.fbx(**exportArgs)
+        if (self.applyAnimationFix):
+            for arma in armatures:
+                self.processArmature(context, arma, forward = False)
+        self.report({'INFO'}, "Exported FBX to {}".format(self.filepath))
+        return {'FINISHED'}
+
 
     def invoke(self, context, event):
         if (len(self.filepath) == 0):
@@ -182,7 +183,6 @@ class TMTKAnimationFixer(bpy.types.Operator):
     def execute(self, context):
         arma = bpy.context.active_object
         if (arma.type != "ARMATURE"):
-            print("Active object is not of type Armature!")
             return {'CANCELLED'}
         else:
             if (arma.animation_data == None or arma.animation_data.action == None):
