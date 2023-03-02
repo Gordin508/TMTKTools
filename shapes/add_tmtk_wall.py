@@ -41,8 +41,22 @@ class AddTMTKWall(Operator, object_utils.AddObjectHelper):
         name="Wall Height",
         description="Height of the wall",
         min=0.25,
-        max=4.0,
+        max=8.0,
         default=4.0
+    )
+
+    width: FloatProperty(
+        name="Wall Width",
+        description="Width of the wall",
+        min=0.5,
+        max=8.0,
+        default=4.0
+    )
+
+    grid : BoolProperty(
+            name = "Grid",
+            default = True,
+            description = "Grid item?"
     )
 
     @classmethod
@@ -65,22 +79,17 @@ class AddTMTKWall(Operator, object_utils.AddObjectHelper):
                 v.z -= height / 2.0
         return verts, faces
 
-
-    grid : BoolProperty(name = "Grid",
-            default = True,
-            description = "Grid item?")
-
     def draw(self, context):
         layout = self.layout
         box = layout.box()
         box.prop(self, "height")
+        box.prop(self, "width")
         box.prop(self, "grid")
 
     def execute(self, context):
         # turn off 'Enter Edit Mode'
         use_enter_edit_mode = bpy.context.preferences.edit.use_enter_edit_mode
         bpy.context.preferences.edit.use_enter_edit_mode = False
-
         if bpy.context.mode == "OBJECT":
             if context.selected_objects != [] and context.active_object and \
                 (context.active_object.data is not None) and ('TMTKWall' in context.active_object.data.keys()) and \
@@ -89,7 +98,7 @@ class AddTMTKWall(Operator, object_utils.AddObjectHelper):
                 oldmesh = obj.data
                 oldmeshname = obj.data.name
 
-                verts, faces = AddTMTKWall.add_wall(self.height, 4.0, self.grid)
+                verts, faces = AddTMTKWall.add_wall(self.height, self.width, self.grid)
                 mesh = bpy.data.meshes.new("TMP")
                 mesh.from_pydata(verts, [], faces)
                 mesh.update()
@@ -101,7 +110,7 @@ class AddTMTKWall(Operator, object_utils.AddObjectHelper):
                 bpy.data.meshes.remove(oldmesh)
                 obj.data.name = oldmeshname
             else:
-                verts, faces = AddTMTKWall.add_wall(self.height, 4.0, self.grid)
+                verts, faces = AddTMTKWall.add_wall(self.height, self.width, self.grid)
                 obj = create_mesh_object(context, self, verts, [], faces, "Wall")
             obj.data["TMTKWall"] = True
             obj.data["change"] = False
@@ -112,7 +121,7 @@ class AddTMTKWall(Operator, object_utils.AddObjectHelper):
             active_object = context.active_object
             name_active_object = active_object.name
             bpy.ops.object.mode_set(mode='OBJECT')
-            verts, faces = AddTMTKWall.add_wall(self.height, 4.0, self.grid)
+            verts, faces = AddTMTKWall.add_wall(self.height, self.width, self.grid)
 
             obj = create_mesh_object(context, self, verts, [], faces, "TMP")
 
@@ -136,6 +145,7 @@ class AddTMTKWall(Operator, object_utils.AddObjectHelper):
 def TMTKWallParameters():
     TMTKWallParameters = [
         "height",
+        "width",
         "grid",
     ]
     return TMTKWallParameters
