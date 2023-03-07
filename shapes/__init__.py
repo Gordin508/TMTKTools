@@ -22,6 +22,7 @@ bl_info = {
 import bpy
 from bpy.types import Menu
 from . import add_tmtk_wall
+from . import tmtk_templates
 
 class VIEW3D_MT_mesh_tmtk_add(Menu):
     # Define the "Single Vert" menu
@@ -33,6 +34,7 @@ class VIEW3D_MT_mesh_tmtk_add(Menu):
         layout.operator_context = 'INVOKE_REGION_WIN'
         layout.operator("mesh.tmtk_wall_add",
                         text="Add TMTK wall template")
+        layout.menu(tmtk_templates.VIEW3D_MT_TMTK_template_menu.bl_idname, text = "Add object template")
 
 # Define "Extras" menu
 def menu_func(self, context):
@@ -40,7 +42,7 @@ def menu_func(self, context):
     layout.operator_context = 'INVOKE_REGION_WIN'
 
     layout.separator()
-    self.layout.menu("VIEW3D_MT_mesh_tmtk_add",
+    layout.menu(VIEW3D_MT_mesh_tmtk_add.bl_idname,
                 text="TMTK Objects")
 
 def TMTK_context_menu(self, context):
@@ -63,7 +65,7 @@ def TMTK_context_menu(self, context):
 classes = [
     VIEW3D_MT_mesh_tmtk_add,
     add_tmtk_wall.AddTMTKWall,
-]
+] + tmtk_templates.TMTKTEMPLATES_CLASSES
 
 def register():
     from bpy.utils import register_class

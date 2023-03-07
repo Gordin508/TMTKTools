@@ -149,5 +149,3 @@ def TMTKWallParameters():
         "grid",
     ]
     return TMTKWallParameters
-
-
