@@ -20,11 +20,8 @@ import re
 
 TEMPLATE_DIR = "templates"
 
-currentPath = None
-
 def get_items(self, context):
-    global currentPath
-    variants = getVariants(currentPath)
+    variants = getVariants(self.filepath)
     return variants
 
 def getVariants(path):
@@ -33,7 +30,7 @@ def getVariants(path):
     split = os.path.split(path)
     candidates = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, split[0]), recursive=True))
     filename_base = re.match("(.+).fbx", split[1])[1]
-    variants = sorted(list(filter(lambda x: re.match(filename_base + "(_\dm)?.fbx", x) != None, candidates)))
+    variants = sorted(list(filter(lambda x: re.match(filename_base + "(_\d+(\.\d+)?m)?.fbx", x) != None, candidates)))
     variants = [(j, j, '', '', i) for i, j in enumerate(variants)]
 
     return variants
@@ -70,16 +67,12 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         pass
 
     def draw(self, context):
-        global currentPath
-        currentPath = self.filepath
         layout = self.layout
         box = layout.box()
         box.prop(self, "grid")
         box.prop(self, "variant")
 
     def execute(self, context):
-        global currentPath
-        currentPath = self.filepath
         if (self.filepath == ""):
             return {'Cancelled'}
         if (self.variant == None or len(self.variant) == 0):
@@ -113,18 +106,16 @@ class VIEW3D_MT_TMTK_template_menu(Menu):
 
 
 def submenu_draw(self, context):
-    global currentPath
     layout = self.layout
     layout.operator_context = 'INVOKE_REGION_WIN'
     files = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, self.subfolder), recursive=True))
 
     filtered = []
     for f in files:
-        normalized = re.sub("_\dm.fbx", ".fbx", f)
+        normalized = re.sub("_\d+(\.\d+)?m.fbx", ".fbx", f)
         filtered.append(normalized)
 
     filtered = list(dict.fromkeys(sorted(filtered)))
-    currentPath = self.subfolder
     for f in filtered:
         layout.operator(AddTMTKTemplate.bl_idname, text = f).filepath = os.path.join(fullpath, self.subfolder, f)
 
@@ -135,9 +126,10 @@ def init_module():
     global TMTKTEMPLATES_CLASSES
     subfolders = [f.name for f in os.scandir(fullpath) if f.is_dir()]
     for folder in subfolders:
-        submenu = type(classTemplate + "basicshapes", (Menu,), {
+        suffix = folder.replace(" ", "_")
+        submenu = type(classTemplate.format(suffix), (Menu,), {
             # data members
-            "bl_idname": classTemplate.format(folder.replace(" ", "_")),
+            "bl_idname": classTemplate.format(suffix),
             "bl_label": folder,
             "subfolder": folder,
 

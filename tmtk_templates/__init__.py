@@ -33,8 +33,8 @@ def menu_func(self, context):
     layout.operator_context = 'INVOKE_REGION_WIN'
 
     layout.separator()
-    layout.menu(tmtk_templates.VIEW3D_MT_TMTK_template_menu.bl_idname, text = "Add object template", icon_value = icons_dict['planco'].icon_id)
-    layout.operator(add_tmtk_wall.AddTMTKWall.bl_idname, text="Add TMTK wall template", icon_value = icons_dict['planco'].icon_id)
+    layout.menu(tmtk_templates.VIEW3D_MT_TMTK_template_menu.bl_idname, text = "TMTK Template", icon_value = icons_dict['planco'].icon_id)
+    layout.operator(add_tmtk_wall.AddTMTKWall.bl_idname, text="TMTK wall (generative)", icon_value = icons_dict['planco'].icon_id)
 
 def TMTK_context_menu(self, context):
     bl_label = 'Change'
