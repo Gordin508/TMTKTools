@@ -61,7 +61,7 @@ class AddTMTKWall(Operator, object_utils.AddObjectHelper):
 
     @classmethod
     def add_wall(cls, height, width, grid):
-        depth2 = 0.25 / 2
+        depth2 = 0.375 / 2
         width2 = width / 2
         verts = []
         verts += [Vector((-width2, depth2, 0.0)), Vector((-width2, depth2, height))]

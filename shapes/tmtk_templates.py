@@ -12,12 +12,31 @@ import bpy
 import glob
 from bpy.types import Operator, Menu
 from mathutils import Vector, Matrix
-from bpy.props import BoolProperty, StringProperty
+from bpy.props import BoolProperty, StringProperty, EnumProperty
 from bpy_extras import object_utils
 from bpy.utils import resource_path
 import os
+import re
 
 TEMPLATE_DIR = "templates"
+
+currentPath = None
+
+def get_items(self, context):
+    global currentPath
+    variants = getVariants(currentPath)
+    return variants
+
+def getVariants(path):
+    if path == None:
+        return []
+    split = os.path.split(path)
+    candidates = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, split[0]), recursive=True))
+    filename_base = re.match("(.+).fbx", split[1])[1]
+    variants = sorted(list(filter(lambda x: re.match(filename_base + "(_\dm)?.fbx", x) != None, candidates)))
+    variants = [(j, j, '', '', i) for i, j in enumerate(variants)]
+
+    return variants
 
 class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
     bl_idname = "mesh.tmtk_template_add"
@@ -40,19 +59,32 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
             default = ""
     )
 
+    variant: EnumProperty(
+                items=get_items,
+                name="Variant",
+                description="Pick a variant",
+    )
+
     @classmethod
     def add_wall(cls, grid):
         pass
 
     def draw(self, context):
+        global currentPath
+        currentPath = self.filepath
         layout = self.layout
         box = layout.box()
         box.prop(self, "grid")
+        box.prop(self, "variant")
 
     def execute(self, context):
+        global currentPath
+        currentPath = self.filepath
         if (self.filepath == ""):
             return {'Cancelled'}
-        bpy.ops.import_scene.fbx(filepath = self.filepath)
+        if (self.variant == None or len(self.variant) == 0):
+            return {'FINISHED'}
+        bpy.ops.import_scene.fbx(filepath = os.path.join(os.path.split(self.filepath)[0], self.variant))
         bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
         bpy.ops.object.transform_apply()
         if not self.grid:
@@ -81,11 +113,18 @@ class VIEW3D_MT_TMTK_template_menu(Menu):
 
 
 def submenu_draw(self, context):
+    global currentPath
     layout = self.layout
     layout.operator_context = 'INVOKE_REGION_WIN'
     files = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, self.subfolder), recursive=True))
-    print(files)
-    filtered = sorted(files)
+
+    filtered = []
+    for f in files:
+        normalized = re.sub("_\dm.fbx", ".fbx", f)
+        filtered.append(normalized)
+
+    filtered = list(dict.fromkeys(sorted(filtered)))
+    currentPath = self.subfolder
     for f in filtered:
         layout.operator(AddTMTKTemplate.bl_idname, text = f).filepath = os.path.join(fullpath, self.subfolder, f)
 
