@@ -83,7 +83,7 @@ def unregister():
     from bpy.utils import unregister_class
     for cls in reversed(allClasses):
         unregister_class(cls)
-    bpy.utils.previews.remove(custom_icons)
+    bpy.utils.previews.remove(icons_dict)
 
 if __name__ == "__main__":
     register()
