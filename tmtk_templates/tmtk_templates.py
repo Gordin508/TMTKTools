@@ -29,8 +29,9 @@ def getVariants(path):
         return []
     split = os.path.split(path)
     candidates = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, split[0]), recursive=True))
-    filename_base = re.match("(.+).fbx", split[1])[1]
-    variants = sorted(list(filter(lambda x: re.match(filename_base + "(_\d+(\.\d+)?m)?.fbx", x) != None, candidates)))
+    filename_base = re.match("(.+)(.fbx)?", split[1])[1]
+    print(filename_base)
+    variants = sorted(list(filter(lambda x: re.match(re.escape(filename_base) + "(_\d+(\.\d+)?m)?.fbx", x) != None, candidates)))
     variants = [(j, j, '', '', i) for i, j in enumerate(variants)]
 
     return variants
@@ -112,7 +113,7 @@ def submenu_draw(self, context):
 
     filtered = []
     for f in files:
-        normalized = re.sub("_\d+(\.\d+)?m.fbx", ".fbx", f)
+        normalized = re.sub("(_\d+(\.\d+)?m)?.fbx", "", f)
         filtered.append(normalized)
 
     filtered = list(dict.fromkeys(sorted(filtered)))
