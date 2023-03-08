@@ -69,7 +69,7 @@ def filen(fullpath):
 def filter_fbx(file):
     return (file.lower().endswith(".fbx"))
 
-fullpath = os.path.abspath(os.path.join(resource_path('USER'), "scripts", "addons", ADDON_NAME, TEMPLATE_DIR))
+fullpath = icons_dir = os.path.join(os.path.dirname(__file__), TEMPLATE_DIR)
 class VIEW3D_MT_TMTK_template_menu(Menu):
     bl_idname = "VIEW3D_MT_TMTK_template_menu"
     bl_label = "Templates"

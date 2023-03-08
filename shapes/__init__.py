@@ -21,8 +21,12 @@ bl_info = {
 
 import bpy
 from bpy.types import Menu
+import os
 from . import add_tmtk_wall
 from . import tmtk_templates
+
+import bpy.utils.previews
+icons_dict = bpy.utils.previews.new()
 
 class VIEW3D_MT_mesh_tmtk_add(Menu):
     # Define the "Single Vert" menu
@@ -43,7 +47,7 @@ def menu_func(self, context):
 
     layout.separator()
     layout.menu(VIEW3D_MT_mesh_tmtk_add.bl_idname,
-                text="TMTK Objects")
+                text="TMTK Objects", icon_value = icons_dict['planco'].icon_id)
 
 def TMTK_context_menu(self, context):
     bl_label = 'Change'
@@ -61,6 +65,11 @@ def TMTK_context_menu(self, context):
             setattr(props, prm, obj.data[prm])
         layout.separator()
 
+def loadicon():
+    global icons_dict
+    icons_dir = os.path.dirname(__file__)
+    icons_dict.load("planco", os.path.join(icons_dir, "icon.png"), 'IMAGE')
+
 # Register
 classes = [
     VIEW3D_MT_mesh_tmtk_add,
@@ -69,6 +78,7 @@ classes = [
 
 def register():
     from bpy.utils import register_class
+    loadicon()
     for cls in classes:
         register_class(cls)
 
