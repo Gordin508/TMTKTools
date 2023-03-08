@@ -28,26 +28,13 @@ from . import tmtk_templates
 import bpy.utils.previews
 icons_dict = []
 
-class VIEW3D_MT_mesh_tmtk_add(Menu):
-    # Define the "Single Vert" menu
-    bl_idname = "VIEW3D_MT_mesh_tmtk_add"
-    bl_label = "TMTK Wall"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.operator_context = 'INVOKE_REGION_WIN'
-        layout.operator("mesh.tmtk_wall_add",
-                        text="Add TMTK wall template")
-        layout.menu(tmtk_templates.VIEW3D_MT_TMTK_template_menu.bl_idname, text = "Add object template")
-
-# Define "Extras" menu
 def menu_func(self, context):
     layout = self.layout
     layout.operator_context = 'INVOKE_REGION_WIN'
 
     layout.separator()
-    layout.menu(VIEW3D_MT_mesh_tmtk_add.bl_idname,
-                text="TMTK Objects", icon_value = icons_dict['planco'].icon_id)
+    layout.menu(tmtk_templates.VIEW3D_MT_TMTK_template_menu.bl_idname, text = "Add object template", icon_value = icons_dict['planco'].icon_id)
+    layout.operator(add_tmtk_wall.AddTMTKWall.bl_idname, text="Add TMTK wall template", icon_value = icons_dict['planco'].icon_id)
 
 def TMTK_context_menu(self, context):
     bl_label = 'Change'
@@ -59,7 +46,7 @@ def TMTK_context_menu(self, context):
         return
 
     if 'TMTKWall' in obj.data.keys():
-        props = layout.operator("mesh.tmtk_wall_add", text="Change TMTK Wall")
+        props = layout.operator(add_tmtk_wall.AddTMTKWall.bl_idname, text="Change TMTK Wall")
         props.change = True
         for prm in add_tmtk_wall.WallParameters():
             setattr(props, prm, obj.data[prm])
@@ -73,7 +60,6 @@ def loadicon():
 
 # Register
 classes = [
-    VIEW3D_MT_mesh_tmtk_add,
     add_tmtk_wall.AddTMTKWall,
 ]
 
