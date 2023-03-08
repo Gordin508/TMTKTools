@@ -18,7 +18,6 @@ from bpy.utils import resource_path
 import os
 
 TEMPLATE_DIR = "templates"
-ADDON_NAME = "shapes"
 
 class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
     bl_idname = "mesh.tmtk_template_add"
@@ -77,19 +76,41 @@ class VIEW3D_MT_TMTK_template_menu(Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator_context = 'INVOKE_REGION_WIN'
-        layout.menu(VIEW3D_MT_TMTK_template_menu_basicswallhapes.bl_idname)
+        for menu in submenus:
+            layout.menu(menu.bl_idname)
 
-class VIEW3D_MT_TMTK_template_menu_basicswallhapes(Menu):
-    bl_idname = "VIEW3D_MT_TMTK_template_menu_basicswallhapes"
-    bl_label = "Basic Wall Shapes"
 
-    def draw(self, context):
-        layout = self.layout
-        layout.operator_context = 'INVOKE_REGION_WIN'
-        self.path_menu([os.path.join(fullpath, "basic_walls")], AddTMTKTemplate.bl_idname, filter_ext = filter_fbx, display_name = filen)
+def submenu_draw(self, context):
+    layout = self.layout
+    layout.operator_context = 'INVOKE_REGION_WIN'
+    files = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, self.subfolder), recursive=True))
+    print(files)
+    filtered = sorted(files)
+    for f in filtered:
+        layout.operator(AddTMTKTemplate.bl_idname, text = f).filepath = os.path.join(fullpath, self.subfolder, f)
+
+submenus = []
+classTemplate = "VIEW3D_MT_TMTK_template_submenu_{}"
+
+def init_module():
+    global TMTKTEMPLATES_CLASSES
+    subfolders = [f.name for f in os.scandir(fullpath) if f.is_dir()]
+    for folder in subfolders:
+        submenu = type(classTemplate + "basicshapes", (Menu,), {
+            # data members
+            "bl_idname": classTemplate.format(folder.replace(" ", "_")),
+            "bl_label": folder,
+            "subfolder": folder,
+
+            # member functions
+            "draw": submenu_draw
+        })
+        submenus.append(submenu)
+    TMTKTEMPLATES_CLASSES += submenus
 
 TMTKTEMPLATES_CLASSES = [
-    VIEW3D_MT_TMTK_template_menu_basicswallhapes,
     VIEW3D_MT_TMTK_template_menu,
     AddTMTKTemplate
 ]
+
+init_module()

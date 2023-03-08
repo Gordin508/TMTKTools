@@ -26,7 +26,7 @@ from . import add_tmtk_wall
 from . import tmtk_templates
 
 import bpy.utils.previews
-icons_dict = bpy.utils.previews.new()
+icons_dict = []
 
 class VIEW3D_MT_mesh_tmtk_add(Menu):
     # Define the "Single Vert" menu
@@ -67,6 +67,7 @@ def TMTK_context_menu(self, context):
 
 def loadicon():
     global icons_dict
+    icons_dict = bpy.utils.previews.new()
     icons_dir = os.path.dirname(__file__)
     icons_dict.load("planco", os.path.join(icons_dir, "icon.png"), 'IMAGE')
 
@@ -74,12 +75,13 @@ def loadicon():
 classes = [
     VIEW3D_MT_mesh_tmtk_add,
     add_tmtk_wall.AddTMTKWall,
-] + tmtk_templates.TMTKTEMPLATES_CLASSES
+]
 
 def register():
     from bpy.utils import register_class
     loadicon()
-    for cls in classes:
+    allClasses = classes + tmtk_templates.TMTKTEMPLATES_CLASSES
+    for cls in allClasses:
         register_class(cls)
 
     # Add "Extras" menu to the "Add Mesh" menu and context menu.
@@ -91,10 +93,11 @@ def unregister():
     # Remove "Extras" menu from the "Add Mesh" menu and context menu.
     bpy.types.VIEW3D_MT_object_context_menu.remove(TMTK_context_menu)
     bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)
-
+    allClasses = classes + tmtk_templates.TMTKTEMPLATES_CLASSES
     from bpy.utils import unregister_class
-    for cls in reversed(classes):
+    for cls in reversed(allClasses):
         unregister_class(cls)
+    bpy.utils.previews.remove(custom_icons)
 
 if __name__ == "__main__":
     register()
