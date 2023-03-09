@@ -30,7 +30,6 @@ def getVariants(path):
     split = os.path.split(path)
     candidates = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, split[0]), recursive=True))
     filename_base = re.match("(.+)(.fbx)?", split[1])[1]
-    print(filename_base)
     variants = sorted(list(filter(lambda x: re.match(re.escape(filename_base) + "(_\d+(\.\d+)?m)?.fbx", x) != None, candidates)))
     variants = [(j, j, '', '', i) for i, j in enumerate(variants)]
 
@@ -79,12 +78,20 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         if (self.variant == None or len(self.variant) == 0):
             return {'FINISHED'}
         bpy.ops.import_scene.fbx(filepath = os.path.join(os.path.split(self.filepath)[0], self.variant))
-        bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
+        active = bpy.context.selected_objects[0]
+        bpy.context.view_layer.objects.active = active
         bpy.ops.object.transform_apply()
-        if not self.grid:
+
+        minz, maxz = min((v.co.z) for v in active.data.vertices), max((v.co.z) for v in active.data.vertices)
+
+        # heuristic to determine whether fbx item was set up as grid item
+        isGridAdjusted = minz < 0.1 or ((maxz < 1.1 * (-1 * minz)) and (maxz > 0.9 * (-1 * minz)))
+
+        if self.grid ^ isGridAdjusted:
+            sign = 1 if isGridAdjusted else -1
             zoff = bpy.context.selected_objects[0].dimensions.z
             for o in context.selected_objects:
-                o.location.z += zoff / 2
+                o.location.z += sign * zoff / 2
         bpy.ops.object.transform_apply()
         return {'FINISHED'}
 
