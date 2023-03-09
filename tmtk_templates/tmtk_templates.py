@@ -85,7 +85,7 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         minz, maxz = min((v.co.z) for v in active.data.vertices), max((v.co.z) for v in active.data.vertices)
 
         # heuristic to determine whether fbx item was set up as grid item
-        isGridAdjusted = minz < 0.1 or ((maxz < 1.1 * (-1 * minz)) and (maxz > 0.9 * (-1 * minz)))
+        isGridAdjusted = minz < -0.1 or ((maxz < 1.1 * (-1 * minz)) and (maxz > 0.9 * (-1 * minz)))
 
         if self.grid ^ isGridAdjusted:
             sign = 1 if isGridAdjusted else -1

@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 bl_info = {
     "name": "TMTK Templates",
-    "author": "Gohax",
+    "author": "Gohax & Dada Poe",
     "version": (0, 0, 1),
     "blender": (2, 80, 0),
     "location": "View3D > Add > Mesh",
