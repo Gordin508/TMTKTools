@@ -88,10 +88,12 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         isGridAdjusted = minz < -0.1 or ((maxz < 1.1 * (-1 * minz)) and (maxz > 0.9 * (-1 * minz)))
 
         if self.grid ^ isGridAdjusted:
-            sign = 1 if isGridAdjusted else -1
-            zoff = bpy.context.selected_objects[0].dimensions.z
+            if not self.grid:
+                zadjust = max(-minz, 0.0)
+            else:
+                zadjust = -(bpy.context.selected_objects[0].dimensions.z / 2.0)
             for o in context.selected_objects:
-                o.location.z += sign * zoff / 2
+                o.location.z += zadjust
         bpy.ops.object.transform_apply()
         return {'FINISHED'}
 

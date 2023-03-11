@@ -55,7 +55,7 @@ def TMTK_context_menu(self, context):
     if 'TMTKWall' in obj.data.keys():
         props = layout.operator(add_tmtk_wall.AddTMTKWall.bl_idname, text="Change TMTK Wall")
         props.change = True
-        for prm in add_tmtk_wall.WallParameters():
+        for prm in add_tmtk_wall.TMTKWallParameters():
             setattr(props, prm, obj.data[prm])
         layout.separator()
 

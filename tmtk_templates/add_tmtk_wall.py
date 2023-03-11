@@ -61,13 +61,14 @@ class AddTMTKWall(Operator, object_utils.AddObjectHelper):
 
     @classmethod
     def add_wall(cls, height, width, grid):
-        depth2 = 0.375 / 2
+        yp = 0.125
+        yn = -0.25
         width2 = width / 2
         verts = []
-        verts += [Vector((-width2, depth2, 0.0)), Vector((-width2, depth2, height))]
-        verts += [Vector((width2, depth2, 0.0)), Vector((width2, depth2, height))]
-        verts += [Vector((width2, -depth2, 0.0)), Vector((width2, -depth2, height))]
-        verts += [Vector((-width2, -depth2, 0.0)), Vector((-width2, -depth2, height))]
+        verts += [Vector((-width2, yp, 0.0)), Vector((-width2, yp, height))]
+        verts += [Vector((width2, yp, 0.0)), Vector((width2, yp, height))]
+        verts += [Vector((width2, yn, 0.0)), Vector((width2, yn, height))]
+        verts += [Vector((-width2, yn, 0.0)), Vector((-width2, yn, height))]
 
         faces = [[i % 8 for i in range(j, j+4)] for j in range(0,8,2)]
         faces = [[a,b,d,c] for [a,b,c,d] in faces]
