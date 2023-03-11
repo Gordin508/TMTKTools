@@ -24,9 +24,15 @@ from bpy.types import Menu
 import os
 from . import add_tmtk_wall
 from . import tmtk_templates
+from . import add_wallsign_reference
 
 import bpy.utils.previews
 icons_dict = []
+
+classes = [
+    add_tmtk_wall.AddTMTKWall,
+    add_wallsign_reference.AddWallSignReference
+]
 
 def menu_func(self, context):
     layout = self.layout
@@ -35,6 +41,7 @@ def menu_func(self, context):
     layout.separator()
     layout.menu(tmtk_templates.VIEW3D_MT_TMTK_template_menu.bl_idname, text = "TMTK Template", icon_value = icons_dict['planco'].icon_id)
     layout.operator(add_tmtk_wall.AddTMTKWall.bl_idname, text="TMTK wall (generative)", icon_value = icons_dict['planco'].icon_id)
+    layout.operator(add_wallsign_reference.AddWallSignReference.bl_idname, text="Wall sign reference", icon_value = icons_dict['planco'].icon_id)
 
 def TMTK_context_menu(self, context):
     bl_label = 'Change'
@@ -57,11 +64,6 @@ def loadicon():
     icons_dict = bpy.utils.previews.new()
     icons_dir = os.path.dirname(__file__)
     icons_dict.load("planco", os.path.join(icons_dir, "icon.png"), 'IMAGE')
-
-# Register
-classes = [
-    add_tmtk_wall.AddTMTKWall,
-]
 
 def register():
     from bpy.utils import register_class
