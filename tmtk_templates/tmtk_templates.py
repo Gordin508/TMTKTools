@@ -76,7 +76,8 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         if (self.filepath == ""):
             return {'Cancelled'}
         if (self.variant == None or len(self.variant) == 0):
-            return {'FINISHED'}
+            # this can occur when previous item had more options than current one
+            self.variant = get_items(self, context)[0][0]
         bpy.ops.import_scene.fbx(filepath = os.path.join(os.path.split(self.filepath)[0], self.variant))
         active = bpy.context.selected_objects[0]
         bpy.context.view_layer.objects.active = active
