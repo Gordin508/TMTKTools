@@ -24,11 +24,15 @@ def get_items(self, context):
     variants = getVariants(self.filepath)
     return variants
 
+IGLOB_ROOT_DIR_AVAIL = bpy.app.version >= (3,2,0)
 def getVariants(path):
     if path == None:
         return []
     split = os.path.split(path)
-    candidates = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, split[0]), recursive=True))
+    if (IGLOB_ROOT_DIR_AVAIL):
+        candidates = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, split[0]), recursive=True))
+    else:
+        candidates = [os.path.split(f)[1] for f in (glob.iglob(os.path.join(fullpath, split[0], '**.fbx'), recursive=True))]
     filename_base = re.match("(.+)(.fbx)?", split[1])[1]
     variants = sorted(list(filter(lambda x: re.match(re.escape(filename_base) + "(_.*)?.fbx", x) != None, candidates)))
     variants = [(j, j.replace(".fbx", ""), '', '', i) for i, j in enumerate(variants)]
@@ -119,7 +123,10 @@ class VIEW3D_MT_TMTK_template_menu(Menu):
 def submenu_draw(self, context):
     layout = self.layout
     layout.operator_context = 'INVOKE_REGION_WIN'
-    files = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, self.subfolder), recursive=True))
+    if (IGLOB_ROOT_DIR_AVAIL):
+        files = list(glob.iglob('**.fbx', root_dir = os.path.join(fullpath, self.subfolder), recursive=True))
+    else:
+        files = [os.path.split(f)[1] for f in (glob.iglob(os.path.join(fullpath, self.subfolder, '**.fbx'), recursive=True))]
 
     filtered = []
     for f in files:
