@@ -25,6 +25,7 @@ def get_items(self, context):
     return variants
 
 IGLOB_ROOT_DIR_AVAIL = bpy.app.version >= (3,2,0)
+CAN_APPLY_MU_TRANSFORMS = bpy.app.version >= (3,2,2)
 def getVariants(path):
     if path == None:
         return []
@@ -85,7 +86,22 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         bpy.ops.import_scene.fbx(filepath = os.path.join(os.path.split(self.filepath)[0], self.variant))
         active = bpy.context.selected_objects[0]
         bpy.context.view_layer.objects.active = active
-        bpy.ops.object.transform_apply()
+        if (CAN_APPLY_MU_TRANSFORMS):
+            # newer Blender versions can correctly deal with multi user meshes
+            bpy.ops.object.transform_apply(isolate_users = False)
+        else:
+            # for older Blender versions, we have to manually iterate through the meshes
+            selected = bpy.context.selected_objects
+            for s in selected:
+                s.select_set(False)
+            for s in selected:
+                s.select_set(True)
+                bpy.context.view_layer.objects.active = s
+                bpy.ops.object.transform_apply(isolate_users = True)
+                s.select_set(False)
+            for s in selected:
+                s.select_set(True)
+            bpy.context.view_layer.objects.active = selected[0]
 
         minz, maxz = min((v.co.z) for v in active.data.vertices), max((v.co.z) for v in active.data.vertices)
 
