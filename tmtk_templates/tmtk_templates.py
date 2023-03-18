@@ -56,6 +56,12 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
             description = "Grid item?"
     )
 
+    includeLODs : BoolProperty(
+        name = "Include LODs",
+        default = True,
+        description = "Also add LODs if present in the template"
+    )
+
     filepath : StringProperty(
             name = "Item File",
             default = ""
@@ -75,6 +81,7 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         layout = self.layout
         box = layout.box()
         box.prop(self, "grid")
+        box.prop(self, "includeLODs")
         box.prop(self, "variant")
 
     def execute(self, context):
@@ -86,12 +93,15 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         bpy.ops.import_scene.fbx(filepath = os.path.join(os.path.split(self.filepath)[0], self.variant))
         active = bpy.context.selected_objects[0]
         bpy.context.view_layer.objects.active = active
+        if not (self.includeLODs):
+            for o in [s for s in bpy.context.selected_objects if (re.search(r"L[1-5]$", s.name) != None)]:
+                bpy.data.objects.remove(o)
         if (CAN_APPLY_MULTIUSER_TRANSFORMS):
             # newer Blender versions can correctly deal with multi user meshes
             bpy.ops.object.transform_apply(isolate_users = False)
         else:
-            # for older Blender versions, we have to create single user copies of meshes
             selected = bpy.context.selected_objects
+            # for older Blender versions, we have to create single user copies of meshes
             deduplicate = (s for s in selected if s.data.users > 1)
             for s in deduplicate:
                 s.data = s.data.copy()
