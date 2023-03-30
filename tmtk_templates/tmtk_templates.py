@@ -94,8 +94,10 @@ class AddTMTKTemplate(Operator, object_utils.AddObjectHelper):
         active = bpy.context.selected_objects[0]
         bpy.context.view_layer.objects.active = active
         if not (self.includeLODs):
-            for o in [s for s in bpy.context.selected_objects if (re.search(r"L[1-5]$", s.name) != None)]:
+            for o in [s for s in bpy.context.selected_objects if (re.search(r"_L[1-5]$", s.name) != None)]:
                 bpy.data.objects.remove(o)
+            active = bpy.context.selected_objects[0]
+            bpy.context.view_layer.objects.active = active
         if (CAN_APPLY_MULTIUSER_TRANSFORMS):
             # newer Blender versions can correctly deal with multi user meshes
             bpy.ops.object.transform_apply(isolate_users = False)
