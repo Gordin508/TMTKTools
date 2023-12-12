@@ -29,7 +29,16 @@ VERSION = bpy.app.version
 
 TRIANGLE_LIMIT = 8000
 
+def getTris(obj, deps=None):
+    assert obj.type in HINTS_SUPPORTED_TYPES
+    if deps is None:
+        deps = bpy.context.evaluated_depsgraph_get()
+    ev = obj.evaluated_get(deps)
+    mesh = ev.data if obj.type == "MESH" else ev.to_mesh()
+    mesh.calc_loop_triangles()
+    return len(mesh.loop_triangles)
 
+LOD_SUPPORTED_TYPES = ["MESH", "FONT", "CURVE"]
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.tmtklodoperator"
     bl_label = "TMTK: Create LODs"
@@ -41,18 +50,15 @@ class TMTKLODGenerator(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (len([o for o in bpy.context.selected_objects if o.type in ["MESH", "FONT"]]) > 0)
+        return (len([o for o in bpy.context.selected_objects if o.type in LOD_SUPPORTED_TYPES]) > 0)
 
     def execute(self, context):
-        meshObjects = [o for o in bpy.context.selected_objects if o.type in ["MESH", "FONT"]]
+        meshObjects = [o for o in bpy.context.selected_objects if o.type in LOD_SUPPORTED_TYPES]
         for obj in meshObjects:
             obj.name = re.sub("_L0$", "", obj.name)
-            if obj.type == "MESH":
-                triangles = sum(len(polygon.vertices) - 2 for polygon in obj.data.polygons)
-                minRatio = 64.0 / triangles
-                minRatio = minRatio if minRatio <= 1.0 else 1.0
-            else:
-                minRatio = 0.1
+            triangles = getTris(obj)
+            minRatio = 64.0 / triangles
+            minRatio = minRatio if minRatio <= 1.0 else 1.0
             for i in range (1,6):
                 ratios = [0.8, 0.6, 0.4, 0.2, 0.1]
                 new_obj = obj.copy()
@@ -335,6 +341,7 @@ class TMTKNormalizeWeights(bpy.types.Operator):
         row.prop(self, "applyMods")
 
 
+HINTS_SUPPORTED_TYPES = ["MESH", "FONT", "CURVE"]
 class TMTKHints(bpy.types.Operator):
     bl_idname = "object.tmtkhints"
     bl_label = "TMTK: Hints"
@@ -342,7 +349,7 @@ class TMTKHints(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (context.active_object and bpy.context.active_object.type in ["MESH", "FONT"])
+        return (context.active_object and bpy.context.active_object.type in HINTS_SUPPORTED_TYPES)
 
     def execute(self, context):
         return {'FINISHED'}
@@ -358,16 +365,7 @@ class TMTKHints(bpy.types.Operator):
         def getLod(name, i):
             return bpy.data.objects.get("{}_L{}".format(name, i))
 
-        def getTris(obj, deps=None):
-            assert obj.type in ["MESH", "FONT"]
-            if deps is None:
-                deps = bpy.context.evaluated_depsgraph_get()
-            ev = obj.evaluated_get(deps)
-            mesh = ev.data if obj.type == "MESH" else ev.to_mesh()
-            mesh.calc_loop_triangles()
-            return len(mesh.loop_triangles)
-
-        if active.type in ["MESH", "FONT"]:
+        if active.type in HINTS_SUPPORTED_TYPES:
             deps = bpy.context.evaluated_depsgraph_get()
             for i in range(0,6):
                 lod = getLod(self.meshname, i)
