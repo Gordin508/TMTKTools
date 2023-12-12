@@ -358,7 +358,16 @@ class TMTKHints(bpy.types.Operator):
         def getLod(name, i):
             return bpy.data.objects.get("{}_L{}".format(name, i))
 
-        if active.type == "MESH":
+        def getTris(obj, deps=None):
+            assert obj.type in ["MESH", "FONT"]
+            if deps is None:
+                deps = bpy.context.evaluated_depsgraph_get()
+            ev = obj.evaluated_get(deps)
+            mesh = ev.data if obj.type == "MESH" else ev.to_mesh()
+            mesh.calc_loop_triangles()
+            return len(mesh.loop_triangles)
+
+        if active.type in ["MESH", "FONT"]:
             deps = bpy.context.evaluated_depsgraph_get()
             for i in range(0,6):
                 lod = getLod(self.meshname, i)
@@ -366,16 +375,12 @@ class TMTKHints(bpy.types.Operator):
                     self.lods = False
                     break
                 else:
-                    eval = lod.evaluated_get(deps)
-                    eval.data.calc_loop_triangles()
-                    self.lodTriCounts.append(len(eval.data.loop_triangles))
+                    self.lodTriCounts.append(getTris(lod, deps))
             if (self.lods):
                 for i in range(0,5):
                     if (self.lodTriCounts[i + 1] > self.lodTriCounts[i]):
                         self.lodOrderError = i
-            selfEval = active.evaluated_get(deps)
-            selfEval.data.calc_loop_triangles()
-            self.triCount = len(selfEval.data.loop_triangles)
+            self.triCount = getTris(active, deps)
         else:
             self.lods = len([lod for lod in (getLod(self.meshname, i) for i in range(0,6)) if lod is not None]) == 6
             self.triCount = None
