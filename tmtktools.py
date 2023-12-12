@@ -342,7 +342,7 @@ class TMTKHints(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (context.active_object and bpy.context.active_object.type == "MESH")
+        return (context.active_object and bpy.context.active_object.type in ["MESH", "FONT"])
 
     def execute(self, context):
         return {'FINISHED'}
@@ -352,24 +352,33 @@ class TMTKHints(bpy.types.Operator):
         self.meshname = re.sub("_L[0-5]$", "", active.name)
         self.lods = True
         self.lodTriCounts = []
-        deps = bpy.context.evaluated_depsgraph_get()
-        for i in range(0,6):
-            lod = bpy.data.objects.get("{}_L{}".format(self.meshname, i))
-            if lod == None:
-                self.lods = False
-                break
-            else:
-                eval = lod.evaluated_get(deps)
-                eval.data.calc_loop_triangles()
-                self.lodTriCounts.append(len(eval.data.loop_triangles))
         self.lodOrderError = -1
-        if (self.lods):
-            for i in range(0,5):
-                if (self.lodTriCounts[i + 1] > self.lodTriCounts[i]):
-                    self.lodOrderError = i
-        selfEval = active.evaluated_get(deps)
-        selfEval.data.calc_loop_triangles()
-        self.triCount = len(selfEval.data.loop_triangles)
+        self.type = active.type
+
+        def getLod(name, i):
+            return bpy.data.objects.get("{}_L{}".format(name, i))
+
+        if active.type == "MESH":
+            deps = bpy.context.evaluated_depsgraph_get()
+            for i in range(0,6):
+                lod = getLod(self.meshname, i)
+                if lod == None:
+                    self.lods = False
+                    break
+                else:
+                    eval = lod.evaluated_get(deps)
+                    eval.data.calc_loop_triangles()
+                    self.lodTriCounts.append(len(eval.data.loop_triangles))
+            if (self.lods):
+                for i in range(0,5):
+                    if (self.lodTriCounts[i + 1] > self.lodTriCounts[i]):
+                        self.lodOrderError = i
+            selfEval = active.evaluated_get(deps)
+            selfEval.data.calc_loop_triangles()
+            self.triCount = len(selfEval.data.loop_triangles)
+        else:
+            self.lods = len([lod for lod in (getLod(self.meshname, i) for i in range(0,6)) if lod is not None]) == 6
+            self.triCount = None
         materialSlots = [slot for slot in active.material_slots if slot.material != None]
         self.hasMaterial = (len(materialSlots) > 0)
         self.materials = [slot.material.name for slot in materialSlots]
@@ -398,10 +407,12 @@ class TMTKHints(bpy.types.Operator):
         box = layout.box()
         addText(box, "Object has LODs: {}".format(self.lods))
         if (self.lods):
-            if (self.lodOrderError >= 0):
+            if (self.lodTriCounts and self.lodOrderError >= 0):
                 e = self.lodOrderError
                 addText(box, "- LODs are out of order: L{} ({} triangles) is less detailed than L{} ({} triangles)."
                                 .format(e, self.lodTriCounts[e], e + 1, self.lodTriCounts[e + 1]))
+            elif not self.lodTriCounts:
+                addText(box,  "- Addon does not support checking for correct LOD order on objects of type {}".format(self.type))
         else:
             addText(box, "- You should add LODs named {} to {}".format(self.meshname + "_L0", self.meshname + "_L5"))
 
@@ -431,9 +442,13 @@ class TMTKHints(bpy.types.Operator):
             addText(box, "- Longest axis is over 8.0m")
 
         box = layout.box()
-        addText(box, "Object is within triangle limit ({}): {}".format(TRIANGLE_LIMIT, self.triCount <= TRIANGLE_LIMIT))
-        if (self.triCount > TRIANGLE_LIMIT):
-            addText(box, "- Object has {} triangles".format(self.triCount, TRIANGLE_LIMIT))
+        if self.triCount is not None:
+            addText(box, "Object is within triangle limit ({}): {}".format(TRIANGLE_LIMIT, self.triCount <= TRIANGLE_LIMIT))
+            if (self.triCount > TRIANGLE_LIMIT):
+                addText(box, "- Object has {} triangles".format(self.triCount, TRIANGLE_LIMIT))
+        else:
+            addText(box, "Object is within triangle limit ({}): {}".format(TRIANGLE_LIMIT, "N/A"))
+            addText(box, "- Addon can not yet perform this check on objects of type {}".format(self.type))
         box = layout.box()
         addText(box, "Object is animated: {}".format(self.hasAnimation))
         if (self.hasAnimation):
