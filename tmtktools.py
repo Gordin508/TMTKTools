@@ -41,16 +41,18 @@ class TMTKLODGenerator(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (len([o for o in bpy.context.selected_objects if o.type == "MESH"]) > 0)
+        return (len([o for o in bpy.context.selected_objects if o.type in ["MESH", "FONT"]]) > 0)
 
     def execute(self, context):
-        meshObjects = [o for o in bpy.context.selected_objects if o.type == "MESH"]
+        meshObjects = [o for o in bpy.context.selected_objects if o.type in ["MESH", "FONT"]]
         for obj in meshObjects:
             obj.name = re.sub("_L0$", "", obj.name)
-
-            triangles = sum(len(polygon.vertices) - 2 for polygon in obj.data.polygons)
-            minRatio = 64.0 / triangles
-            minRatio = minRatio if minRatio <= 1.0 else 1.0
+            if obj.type == "MESH":
+                triangles = sum(len(polygon.vertices) - 2 for polygon in obj.data.polygons)
+                minRatio = 64.0 / triangles
+                minRatio = minRatio if minRatio <= 1.0 else 1.0
+            else:
+                minRatio = 0.1
             for i in range (1,6):
                 ratios = [0.8, 0.6, 0.4, 0.2, 0.1]
                 new_obj = obj.copy()
@@ -142,7 +144,7 @@ class TMTKExporter(bpy.types.Operator):
         if not (self.filepath.lower().endswith(".fbx")):
             self.filepath = self.filepath + ".fbx"
         exportArgs = {"filepath": self.filepath,
-        "object_types": {"ARMATURE","MESH"},
+        "object_types": {"ARMATURE","MESH", "OTHER"},
         "bake_space_transform": True,
         "use_selection": self.onlySelected,
         "axis_forward": '-Z', "axis_up":'Y',
