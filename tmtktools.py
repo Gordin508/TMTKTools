@@ -1,5 +1,5 @@
 """
-Copyright © 2022 Gohax
+Copyright © 2023 Gohax
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 import bpy
 from mathutils import Matrix
 from mathutils import Vector
-import math
 import os
 import re
 
@@ -22,13 +21,14 @@ bl_info = {
     "location": "View3D > Object",
     "category": "Object",
     "author": "Gohax",
-    "version": (0, 2, 6),
+    "version": (0, 2, 7),
     "description": "Tools to make TMTK item creation easier"
 }
 
 VERSION = bpy.app.version
 
 TRIANGLE_LIMIT = 8000
+
 
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.tmtklodoperator"
@@ -116,6 +116,8 @@ class TMTKExporter(bpy.types.Operator):
                                               description="Apply the TMTK animation fix to all armatures")
     addLeafBones: bpy.props.BoolProperty(name="Add Leaf Bones", default = False,
                                         description="Enable this if you intend to edit the armature from exported data")
+    exportOther: bpy.props.BoolProperty(name="Export objects of type 'OTHER'", default = True,
+                                        description="This includes curves and text objects, but not lights, cameras or empties")
 
     @classmethod
     def poll(cls, context):
@@ -144,7 +146,7 @@ class TMTKExporter(bpy.types.Operator):
         if not (self.filepath.lower().endswith(".fbx")):
             self.filepath = self.filepath + ".fbx"
         exportArgs = {"filepath": self.filepath,
-        "object_types": {"ARMATURE","MESH", "OTHER"},
+        "object_types": {"ARMATURE","MESH", "OTHER"} if self.exportOther else {"ARMATURE","MESH"},
         "bake_space_transform": True,
         "use_selection": self.onlySelected,
         "axis_forward": '-Z', "axis_up":'Y',
