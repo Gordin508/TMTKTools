@@ -406,9 +406,18 @@ class TMTKHints(bpy.types.Operator):
 
     def draw(self, context):
         layout = self.layout
-        addText = lambda box, string: box.row().label(text = string, translate = False)
+
+        def addText(box, text, isokay: bool = None, icon: str = None):
+            kwargs = {"text": text, "translate": False}
+            if isokay is not None:
+                kwargs["icon"] = "ERROR" if not isokay else "CHECKMARK"
+            if icon is not None:
+                kwargs["icon"] = icon
+            box.row().label(**kwargs)
+
         box = layout.box()
-        addText(box, "Object has LODs: {}".format(self.lods))
+        lodsokay = self.lods and self.lodOrderError < 0
+        addText(box, "Object has LODs: {}".format(self.lods), isokay=lodsokay)
         if (self.lods):
             if (self.lodTriCounts and self.lodOrderError >= 0):
                 e = self.lodOrderError
@@ -420,7 +429,7 @@ class TMTKHints(bpy.types.Operator):
             addText(box, "- You should add LODs named {} to {}".format(self.meshname + "_L0", self.meshname + "_L5"))
 
         box = layout.box()
-        addText(box, "Object has assigned material: {}".format(self.hasMaterial))
+        addText(box, "Object has assigned material: {}".format(self.hasMaterial), isokay=self.hasMaterial)
         if not (self.hasMaterial):
             addText(box, "- TMTK will refuse objects without any assigned material.")
         else:
@@ -428,12 +437,14 @@ class TMTKHints(bpy.types.Operator):
             addText(box, "- Your texture files should be named {} etc.".format(nameSuggestions))
 
         box = layout.box()
-        addText(box, "All object mode transformations are applied: {}".format(not self.unappliedTransforms))
+        transformsapplied = not self.unappliedTransforms
+        addText(box, "All object mode transformations are applied: {}".format(transformsapplied), isokay=transformsapplied)
         if (self.unappliedTransforms):
             addText(box, "- Unless this is intended, you should explicitly apply all object mode transformations before exporting.")
 
         box = layout.box()
-        addText(box, "Object has correct dimensions: {}".format(not(self.tooSmall or self.tooLarge)))
+        dimensionscorrect = not (self.tooSmall or self.tooLarge)
+        addText(box, "Object has correct dimensions: {}".format(dimensionscorrect), isokay=dimensionscorrect)
         if (self.tooSmall or self.tooLarge):
             addText(box, "- Object dimensions: {:0.3f}m, {:0.3f}m, {:0.3f}m (x, y, z)".format(self.dimensions[0], self.dimensions[1], self.dimensions[2]))
         if (self.unit_scale != 1.0):
@@ -446,14 +457,15 @@ class TMTKHints(bpy.types.Operator):
 
         box = layout.box()
         if self.triCount is not None:
-            addText(box, "Object is within triangle limit ({}): {}".format(TRIANGLE_LIMIT, self.triCount <= TRIANGLE_LIMIT))
+            withinLimit = self.triCount <= TRIANGLE_LIMIT
+            addText(box, "Object is within triangle limit ({}): {}".format(TRIANGLE_LIMIT, withinLimit), isokay=withinLimit)
             if (self.triCount > TRIANGLE_LIMIT):
                 addText(box, "- Object has {} triangles".format(self.triCount, TRIANGLE_LIMIT))
         else:
             addText(box, "Object is within triangle limit ({}): {}".format(TRIANGLE_LIMIT, "N/A"))
             addText(box, "- Addon can not yet perform this check on objects of type {}".format(self.type))
         box = layout.box()
-        addText(box, "Object is animated: {}".format(self.hasAnimation))
+        addText(box, "Object is animated: {}".format(self.hasAnimation), icon="PAUSE" if not self.hasAnimation else "ARMATURE_DATA")
         if (self.hasAnimation):
             addText(box, "- Make sure to use the animation fixes when exporting")
             if (self.hasArmatureModifier):
