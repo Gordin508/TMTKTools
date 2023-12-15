@@ -155,8 +155,8 @@ class TMTK_OT_Exporter(bpy.types.Operator):
         assert(armature.type == "ARMATURE")
         if not (armature.get(FIXEDPROP) == True or armature.animation_data == None or armature.animation_data.action == None):
             armaAction = armature.animation_data.action
-            TMTKAnimationFixer.scaleLocationFcurves(armaAction, forward)
-            TMTKAnimationFixer.prepareArmatureForExport(armature, forward)
+            TMTK_OT_AnimationFixer.scaleLocationFcurves(armaAction, forward)
+            TMTK_OT_AnimationFixer.prepareArmatureForExport(armature, forward)
 
     def execute(self, context):
         if (len(os.path.basename(self.filepath)) == 0):
@@ -212,8 +212,8 @@ class TMTK_OT_AnimationFixer(bpy.types.Operator):
                 self.report({'WARNING'}, 'Operation cancelled as armature does not contain animation data')
                 return{'CANCELLED'}
             armaAction = arma.animation_data.action
-            TMTKAnimationFixer.scaleLocationFcurves(armaAction)
-            TMTKAnimationFixer.prepareArmatureForExport(arma)
+            TMTK_OT_AnimationFixer.scaleLocationFcurves(armaAction)
+            TMTK_OT_AnimationFixer.prepareArmatureForExport(arma)
             arma[FIXEDPROP] = True
         return {'FINISHED'}
 
