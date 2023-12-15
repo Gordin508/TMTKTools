@@ -39,12 +39,17 @@ def getTris(obj, deps=None):
     return len(mesh.loop_triangles)
 
 LOD_SUPPORTED_TYPES = ["MESH", "FONT", "CURVE"]
+CAN_MOVE_MODIFIERS = "modifier_move_to_index" in dir(bpy.ops.object)
+DECIMATE_BEFORE_ARMA_TOOLTIP = "If an armature modifier is present, move decimate modifier above it in the modifier stack (recommended)"
+DECIMATE_BEFORE_ARMA_TOOLTIP_ALT = "Not available in this Blender version"
 class TMTKLODGenerator(bpy.types.Operator):
     bl_idname = "object.tmtklodoperator"
     bl_label = "TMTK: Create LODs"
     bl_description = "Create LODs for selected objects"
     decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level",default=True)
-    decimateBeforeArma: bpy.props.BoolProperty(name="Decimate before Armature", description = "If an armature modifier is present, move decimate modifier above it in the modifier stack (recommended)", default = True)
+    decimateBeforeArma: bpy.props.BoolProperty(name="Decimate before Armature",
+                                               description = DECIMATE_BEFORE_ARMA_TOOLTIP if CAN_MOVE_MODIFIERS else DECIMATE_BEFORE_ARMA_TOOLTIP_ALT,
+                                               default = CAN_MOVE_MODIFIERS)
     linkedcopies: bpy.props.BoolProperty(name="Create linked copies", description = "LODs reference the same mesh data as L0, as opposed to using deep copies",default=False)
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -99,7 +104,7 @@ class TMTKLODGenerator(bpy.types.Operator):
         row = col.row()
         row.separator()
         row.prop(self, "decimateBeforeArma")
-        row.enabled = self.decimate
+        row.enabled = self.decimate and CAN_MOVE_MODIFIERS
         row = col.row()
         row.prop(self, "linkedcopies")
 
@@ -341,6 +346,9 @@ class TMTKNormalizeWeights(bpy.types.Operator):
         row.prop(self, "applyMods")
 
 
+ICONS_AVAILABLE = bpy.types.UILayout.bl_rna.functions["prop"].parameters["icon"].enum_items.keys()
+OKICON = "CHECKMARK" if "CHECKMARK" in ICONS_AVAILABLE else "CHECKBOX_HLT"
+NOTOKICON = "ERROR" if "CHECKMARK" in ICONS_AVAILABLE else "CHECKBOX_DEHLT"
 HINTS_SUPPORTED_TYPES = ["MESH", "FONT", "CURVE"]
 class TMTKHints(bpy.types.Operator):
     bl_idname = "object.tmtkhints"
@@ -410,9 +418,11 @@ class TMTKHints(bpy.types.Operator):
         def addText(box, text, isokay: bool = None, icon: str = None):
             kwargs = {"text": text, "translate": False}
             if isokay is not None:
-                kwargs["icon"] = "ERROR" if not isokay else "CHECKMARK"
+                kwargs["icon"] = NOTOKICON if not isokay else OKICON
             if icon is not None:
                 kwargs["icon"] = icon
+            if "icon" in kwargs and kwargs["icon"] not in ICONS_AVAILABLE:
+                del kwargs["icon"]
             box.row().label(**kwargs)
 
         box = layout.box()
