@@ -38,12 +38,13 @@ def getTris(obj, deps=None):
     mesh.calc_loop_triangles()
     return len(mesh.loop_triangles)
 
+CONTEXT_TEMP_OVERWRITE_API = VERSION >= (4, 0, 0)
 LOD_SUPPORTED_TYPES = ["MESH", "FONT", "CURVE"]
 CAN_MOVE_MODIFIERS = "modifier_move_to_index" in dir(bpy.ops.object)
 DECIMATE_BEFORE_ARMA_TOOLTIP = "If an armature modifier is present, move decimate modifier above it in the modifier stack (recommended)"
 DECIMATE_BEFORE_ARMA_TOOLTIP_ALT = "Not available in this Blender version"
-class TMTKLODGenerator(bpy.types.Operator):
-    bl_idname = "object.tmtklodoperator"
+class TMTK_OT_LODGenerator(bpy.types.Operator):
+    bl_idname = "tmtk.tmtklodoperator"
     bl_label = "TMTK: Create LODs"
     bl_description = "Create LODs for selected objects"
     decimate: bpy.props.BoolProperty(name="Add decimate modifiers", description = "Add a preconfigured decimate modifier to each LOD level",default=True)
@@ -82,7 +83,14 @@ class TMTKLODGenerator(bpy.types.Operator):
                     mod.ratio = ratios[i - 1] if ratios[i - 1] > minRatio else minRatio
                     armaMods = [i for i in range(0, len(new_obj.modifiers)) if new_obj.modifiers[i].type == "ARMATURE"]
                     if (self.decimateBeforeArma and len(armaMods) != 0):
-                        bpy.ops.object.modifier_move_to_index({'object': new_obj}, modifier = modName, index = armaMods[0])
+                        if CONTEXT_TEMP_OVERWRITE_API:
+                            from bpy import context
+                            context_override = context.copy()
+                            context_override['object'] = new_obj
+                            with context.temp_override(**context_override):
+                                bpy.ops.object.modifier_move_to_index(modifier = modName, index = armaMods[0])
+                        else:
+                            bpy.ops.object.modifier_move_to_index({'object': new_obj}, modifier = modName, index = armaMods[0])
 
             obj.name = obj.name + "_L0"
 
@@ -110,8 +118,8 @@ class TMTKLODGenerator(bpy.types.Operator):
 
 FIXEDPROP = "TMTKAnimFixed"
 USE_VISIBLE_AVAILABLE = (VERSION[0] > 3 or (VERSION[0] >= 3 and VERSION[1] >= 2))
-class TMTKExporter(bpy.types.Operator):
-    bl_idname = "object.tmtkexporter"
+class TMTK_OT_Exporter(bpy.types.Operator):
+    bl_idname = "tmtk.tmtkexporter"
     bl_label = "TMTK: Export to FBX"
     bl_description = "Export objects to FBX file with correct settings for TMTK"
     bl_options = {'REGISTER', 'UNDO'}
@@ -185,8 +193,8 @@ class TMTKExporter(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
-class TMTKAnimationFixer(bpy.types.Operator):
-    bl_idname = "object.tmtkanimationfixer"
+class TMTK_OT_AnimationFixer(bpy.types.Operator):
+    bl_idname = "tmtk.tmtkanimationfixer"
     bl_label = "TMTK: Animation Fixer"
     bl_description = "Prepare animation for export to TMTK (only use directly before exporting)"
     bl_options = {'REGISTER', 'UNDO'}
@@ -252,8 +260,8 @@ class TMTKAnimationFixer(bpy.types.Operator):
 
 MAXINFLUENCERS = 4
 PRECISION = 12
-class TMTKNormalizeWeights(bpy.types.Operator):
-    bl_idname = "object.tmtknormalizeoperator"
+class TMTK_OT_NormalizeWeights(bpy.types.Operator):
+    bl_idname = "tmtk.tmtknormalizeoperator"
     bl_label = "TMTK: Normalize Bone Weights"
     bl_description = "Normalize Vertex Group Weights more precisely than Blender's Normalization would"
     bl_options = {'REGISTER', 'UNDO'}
@@ -350,8 +358,8 @@ ICONS_AVAILABLE = bpy.types.UILayout.bl_rna.functions["prop"].parameters["icon"]
 OKICON = "CHECKMARK" if "CHECKMARK" in ICONS_AVAILABLE else "CHECKBOX_HLT"
 NOTOKICON = "ERROR" if "CHECKMARK" in ICONS_AVAILABLE else "CHECKBOX_DEHLT"
 HINTS_SUPPORTED_TYPES = ["MESH", "FONT", "CURVE"]
-class TMTKHints(bpy.types.Operator):
-    bl_idname = "object.tmtkhints"
+class TMTK_OT_Hints(bpy.types.Operator):
+    bl_idname = "tmtk.tmtkhints"
     bl_label = "TMTK: Hints"
     bl_description = "Give some hints about the currently selected object"
 
@@ -491,37 +499,37 @@ class TMTKHints(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
 
-class TMTKSubMenu(bpy.types.Menu):
-    bl_idname = 'object.tmtktools'
+class TMTK_MT_TMTKMenu(bpy.types.Menu):
+    bl_idname = 'TMTK_MT_tmtkmenu'
     bl_label = 'TMTK Tools'
 
     def draw(self, context):
         layout = self.layout
-        layout.operator(TMTKAnimationFixer.bl_idname)
-        layout.operator(TMTKLODGenerator.bl_idname)
-        layout.operator(TMTKExporter.bl_idname)
-        layout.operator(TMTKHints.bl_idname)
-        layout.operator(TMTKNormalizeWeights.bl_idname)
+        layout.operator(TMTK_OT_AnimationFixer.bl_idname)
+        layout.operator(TMTK_OT_LODGenerator.bl_idname)
+        layout.operator(TMTK_OT_Exporter.bl_idname)
+        layout.operator(TMTK_OT_Hints.bl_idname)
+        layout.operator(TMTK_OT_NormalizeWeights.bl_idname)
 
 def menu_func(self, context):
-    self.layout.menu(TMTKSubMenu.bl_idname)
+    self.layout.menu(TMTK_MT_TMTKMenu.bl_idname)
 
 def register():
-    bpy.utils.register_class(TMTKAnimationFixer)
-    bpy.utils.register_class(TMTKLODGenerator)
-    bpy.utils.register_class(TMTKExporter)
-    bpy.utils.register_class(TMTKHints)
-    bpy.utils.register_class(TMTKNormalizeWeights)
-    bpy.utils.register_class(TMTKSubMenu)
+    bpy.utils.register_class(TMTK_OT_AnimationFixer)
+    bpy.utils.register_class(TMTK_OT_LODGenerator)
+    bpy.utils.register_class(TMTK_OT_Exporter)
+    bpy.utils.register_class(TMTK_OT_Hints)
+    bpy.utils.register_class(TMTK_OT_NormalizeWeights)
+    bpy.utils.register_class(TMTK_MT_TMTKMenu)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
 def unregister():
-    bpy.utils.unregister_class(TMTKAnimationFixer)
-    bpy.utils.unregister_class(TMTKLODGenerator)
-    bpy.utils.unregister_class(TMTKExporter)
-    bpy.utils.unregister_class(TMTKHints)
-    bpy.utils.unregister_class(TMTKNormalizeWeights)
-    bpy.utils.unregister_class(TMTKSubMenu)
+    bpy.utils.unregister_class(TMTK_OT_AnimationFixer)
+    bpy.utils.unregister_class(TMTK_OT_LODGenerator)
+    bpy.utils.unregister_class(TMTK_OT_Exporter)
+    bpy.utils.unregister_class(TMTK_OT_Hints)
+    bpy.utils.unregister_class(TMTK_OT_NormalizeWeights)
+    bpy.utils.unregister_class(VIEW3D_MT_TMTKMenu)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
 
 if __name__ == "__main__":
