@@ -529,7 +529,7 @@ def unregister():
     bpy.utils.unregister_class(TMTK_OT_Exporter)
     bpy.utils.unregister_class(TMTK_OT_Hints)
     bpy.utils.unregister_class(TMTK_OT_NormalizeWeights)
-    bpy.utils.unregister_class(VIEW3D_MT_TMTKMenu)
+    bpy.utils.unregister_class(TMTK_MT_TMTKMenu)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
 
 if __name__ == "__main__":
