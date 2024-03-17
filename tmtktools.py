@@ -366,35 +366,32 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                                          step=50,
                                          precision=4,
                                          description="Desired size of the object ingame. The object will be scaled such that its largest dimension takes this value")
-    dummy_vertices: bpy.props.BoolProperty(name="Create Dummy Vertices", default = False,
-                                           description="Create two dummy vertices to suggest a cuboid 6m shape")
 
     @classmethod
     def poll(cls, context):
         return (context.active_object and bpy.context.active_object.type == "MESH")
 
+
     def execute(self, context):
         target_obj = bpy.context.active_object
         dims = target_obj.dimensions
         maxdim = max(dims)
-        anchor = list(target_obj.data.vertices[0].co)
+        bb_min = list(target_obj.data.vertices[0].co)
+        bb_max = bb_min.copy()
         for vert in target_obj.data.vertices:
             for i in range(3):
-                anchor[i] = min(anchor[i], vert.co[i])
-        anchor = Vector(anchor)
+                bb_min[i] = min(bb_min[i], vert.co[i])
+                bb_max[i] = max(bb_max[i], vert.co[i])
+        bb_min = Vector(bb_min)
+        bb_max = Vector(bb_max)
+        anchor = bb_min / 2 + bb_max / 2
         scalefac = self.target_size / maxdim
         target_dims = dims * scalefac
 
-        # move all vertices to their final position at BLF
-        offset = -target_dims / 2 - anchor
-        offset.z = 0  # place on origin, not centered on it
-        for v in target_obj.data.vertices:
-            v.co += offset
 
-        BONE_NAMES = ["ROOT", "X", "Y", "Z", "XY", "XZ", "YZ", "XYZ"]
+        BONE_NAMES = ["ORIGIN", "X", "Y", "Z", "A", "B", "C"]
         ROOT_BONE_NAME = BONE_NAMES[0]
 
-        anchor = anchor + offset
         assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
         normfactor = Vector(tuple(1/dims[i] if dims[i] > 0 else 1.0 for i in range(3)))
         if target_obj is not None:
@@ -423,32 +420,15 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
 
             for v in target_obj.data.vertices:
-                coordinates_relative = v.co - anchor  # position relative to BLF
-                targetpos_normalized = coordinates_relative * normfactor
-                currentpos_normalized = Vector([coordinates_relative[i] / target_dims[i] for i in range(3)])
+                targetpos = v.co * scalefac
+                targetpos_normalized = Vector([targetpos[i] / target_dims[i] for i in range(3)])
+                currentpos_normalized = Vector([v.co[i] / target_dims[i] for i in range(3)])
                 diff_normalized = targetpos_normalized - currentpos_normalized  # difference between real and target pos in norm space
-                # No negative diff on any axis may occur, we cannot represent this as weights must be positive
-                assert min(diff_normalized) >= 0.0, f"Unexpected diff: {diff_normalized}"
 
-                sorted_diff = sorted(list(zip(diff_normalized, 'XYZ')))  # e.g. [(0.3, 'Y'), (0.5, 'X'), (0.7, 'Z')]
-                min_d = sorted_diff[0]
-                med_d = sorted_diff[1]
-                max_d = sorted_diff[2]
-
-                # create 'barycentric' coordinates
-                sharedweight = min_d[0]
-                target_obj.vertex_groups['XYZ'].add(index=[v.index], weight=sharedweight, type='REPLACE')
-                second_vg = ''.join(sorted((med_d[1], max_d[1])))
-                second_weight = max(0, med_d[0] - sharedweight)
-                target_obj.vertex_groups[second_vg].add(index=[v.index], weight=second_weight, type='REPLACE')
-                maxweight = max(0, max_d[0] - second_weight - sharedweight)
-                target_obj.vertex_groups[max_d[1]].add(index=[v.index], weight=maxweight, type='REPLACE')
-                target_obj.vertex_groups[ROOT_BONE_NAME].add(index=[v.index], weight=1.0-maxweight-second_weight-sharedweight, type='REPLACE')
-
-            if self.dummy_vertices:
-                target_obj.data.vertices.add(count=2)
-                target_obj.data.vertices[-2].co = anchor
-                target_obj.data.vertices[-1].co = anchor + Vector((6, 6, 6))
+                for i in range(3):
+                    vertex_grp = chr(0x41 + i + 0x17 * (diff_normalized[i] >= 0))
+                    target_obj.vertex_groups[vertex_grp].add(index=[v.index], weight=abs(diff_normalized[i]) / 3, type='REPLACE')
+                target_obj.vertex_groups[ROOT_BONE_NAME].add(index=[v.index], weight=1.0 - sum((abs(x) / 3 for x in diff_normalized)), type='REPLACE')
 
         armature_obj.animation_data_create()
         # we do not need to create these manually it turns out
@@ -464,11 +444,15 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
         for fcurve in armature_obj.animation_data.action.fcurves:
             bone_label = fcurve.data_path.split('"')[1]
             if bone_label == ROOT_BONE_NAME:
+                fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, 0))
                 continue
+
             # Pose Mode coordinates are differeny: Y is -Z, Z is Y
-            directions = [ord(c) - 0x58 for c in bone_label]
+            direction = (ord(bone_label[0]) - 0x41) % 23
             idx = [0, 2, 1][fcurve.array_index]  # XYZ = 012
-            val = 0 if idx not in directions else target_dims[idx]
+            val = 0 if idx != direction else target_dims[idx] * 3
+            if bone_label[0] < 'X':
+                val = -val
             if idx == 1:
                 val = -val
             fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, val))
