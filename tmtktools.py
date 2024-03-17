@@ -1,5 +1,5 @@
 """
-Copyright © 2023 Gohax
+Copyright © 2022-2024 Gohax
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -21,7 +21,7 @@ bl_info = {
     "location": "View3D > Object",
     "category": "Object",
     "author": "Gohax",
-    "version": (0, 2, 7),
+    "version": (0, 2, 8),
     "description": "Tools to make TMTK item creation easier"
 }
 
@@ -354,6 +354,140 @@ class TMTK_OT_NormalizeWeights(bpy.types.Operator):
         row.prop(self, "applyMods")
 
 
+class TMTK_OT_ScaleHack(bpy.types.Operator):
+    minversion = (3, 0, 0)  # required for vector multiplication
+    bl_idname = "tmtk.tmtkscalehack"
+    bl_label = "TMTK: Scale Hack"
+    bl_description = "Use an armature to scale this object beyond the 8m size limit imposed by TMTK"
+    bl_options = {'REGISTER', 'UNDO'}
+    target_size: bpy.props.FloatProperty(name="Target Size", default = 8.0,
+                                         min=8.0, soft_max=100.0,
+                                         unit='LENGTH',
+                                         step=50,
+                                         precision=4,
+                                         description="Desired size of the object ingame. The object will be scaled such that its largest dimension takes this value")
+    dummy_vertices: bpy.props.BoolProperty(name="Create Dummy Vertices", default = False,
+                                           description="Create two dummy vertices to suggest a cuboid 6m shape")
+
+    @classmethod
+    def poll(cls, context):
+        return (context.active_object and bpy.context.active_object.type == "MESH")
+
+    def execute(self, context):
+        target_obj = bpy.context.active_object
+        dims = target_obj.dimensions
+        maxdim = max(dims)
+        anchor = list(target_obj.data.vertices[0].co)
+        for vert in target_obj.data.vertices:
+            for i in range(3):
+                anchor[i] = min(anchor[i], vert.co[i])
+        anchor = Vector(anchor)
+        scalefac = self.target_size / maxdim
+        target_dims = dims * scalefac
+
+        # move all vertices to their final position at BLF
+        offset = -target_dims / 2 - anchor
+        offset.z = 0  # place on origin, not centered on it
+        for v in target_obj.data.vertices:
+            v.co += offset
+
+        BONE_NAMES = ["ROOT", "X", "Y", "Z", "XY", "XZ", "YZ", "XYZ"]
+        ROOT_BONE_NAME = BONE_NAMES[0]
+
+        anchor = anchor + offset
+        assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
+        normfactor = Vector(tuple(1/dims[i] if dims[i] > 0 else 1.0 for i in range(3)))
+        if target_obj is not None:
+            bpy.ops.object.select_all(action='DESELECT')
+            # Create a new armature object
+            armature = bpy.data.armatures.new("ScaleHack")
+            armature_obj = bpy.data.objects.new(armature.name, armature)
+
+            scene = bpy.context.scene
+            scene.collection.objects.link(armature_obj)
+            bpy.context.view_layer.objects.active = armature_obj
+
+            armature_obj.select_set(True)
+
+            bpy.ops.object.mode_set(mode="EDIT")
+            # Bones for cuboid armature
+            for bone_name in BONE_NAMES:
+                bone = armature.edit_bones.new(bone_name)
+                bone.head = anchor
+                bone.tail = anchor + Vector((0, 0, 1))
+
+            bpy.ops.object.mode_set(mode="OBJECT")
+            for o in (target_obj, armature_obj):
+                o.select_set(True)
+
+            bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
+
+            for v in target_obj.data.vertices:
+                coordinates_relative = v.co - anchor  # position relative to BLF
+                targetpos_normalized = coordinates_relative * normfactor
+                currentpos_normalized = Vector([coordinates_relative[i] / target_dims[i] for i in range(3)])
+                diff_normalized = targetpos_normalized - currentpos_normalized  # difference between real and target pos in norm space
+                # No negative diff on any axis may occur, we cannot represent this as weights must be positive
+                assert min(diff_normalized) >= 0.0, f"Unexpected diff: {diff_normalized}"
+
+                sorted_diff = sorted(list(zip(diff_normalized, 'XYZ')))  # e.g. [(0.3, 'Y'), (0.5, 'X'), (0.7, 'Z')]
+                min_d = sorted_diff[0]
+                med_d = sorted_diff[1]
+                max_d = sorted_diff[2]
+
+                # create 'barycentric' coordinates
+                sharedweight = min_d[0]
+                target_obj.vertex_groups['XYZ'].add(index=[v.index], weight=sharedweight, type='REPLACE')
+                second_vg = ''.join(sorted((med_d[1], max_d[1])))
+                second_weight = max(0, med_d[0] - sharedweight)
+                target_obj.vertex_groups[second_vg].add(index=[v.index], weight=second_weight, type='REPLACE')
+                maxweight = max(0, max_d[0] - second_weight - sharedweight)
+                target_obj.vertex_groups[max_d[1]].add(index=[v.index], weight=maxweight, type='REPLACE')
+                target_obj.vertex_groups[ROOT_BONE_NAME].add(index=[v.index], weight=1.0-maxweight-second_weight-sharedweight, type='REPLACE')
+
+            if self.dummy_vertices:
+                target_obj.data.vertices.add(count=2)
+                target_obj.data.vertices[-2].co = anchor
+                target_obj.data.vertices[-1].co = anchor + Vector((6, 6, 6))
+
+        armature_obj.animation_data_create()
+        # we do not need to create these manually it turns out
+        # armature_obj.animation_data.action = bpy.data.actions.new("Animation")
+        # fcurve = armature_obj.animation_data.action.fcurves.new('pose.bones["X"].location')
+
+        KEYFRAME_FRAME = 1
+        # https://blender.stackexchange.com/questions/259690/how-can-you-insert-keyframe-in-pose-mode-for-armature-without-it-being-static
+        for i, _ in enumerate(armature_obj.data.bones):
+            # bone.select = True
+            armature_obj.pose.bones[i].keyframe_insert(data_path="location", frame=KEYFRAME_FRAME)
+
+        for fcurve in armature_obj.animation_data.action.fcurves:
+            bone_label = fcurve.data_path.split('"')[1]
+            if bone_label == ROOT_BONE_NAME:
+                continue
+            # Pose Mode coordinates are differeny: Y is -Z, Z is Y
+            directions = [ord(c) - 0x58 for c in bone_label]
+            idx = [0, 2, 1][fcurve.array_index]  # XYZ = 012
+            val = 0 if idx not in directions else target_dims[idx]
+            if idx == 1:
+                val = -val
+            fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, val))
+
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.invoke_props_dialog(self)
+        return {'RUNNING_MODAL'}
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        row = col.row()
+        row.prop(self, "target_size")
+        row = col.row()
+        row.prop(self, "dummy_vertices")
+
+
 ICONS_AVAILABLE = bpy.types.UILayout.bl_rna.functions["prop"].parameters["icon"].enum_items.keys()
 OKICON = "CHECKMARK" if "CHECKMARK" in ICONS_AVAILABLE else "CHECKBOX_HLT"
 NOTOKICON = "ERROR" if "CHECKMARK" in ICONS_AVAILABLE else "CHECKBOX_DEHLT"
@@ -509,28 +643,41 @@ class TMTK_MT_TMTKMenu(bpy.types.Menu):
         layout.operator(TMTK_OT_LODGenerator.bl_idname)
         layout.operator(TMTK_OT_Exporter.bl_idname)
         layout.operator(TMTK_OT_Hints.bl_idname)
+        layout.operator(TMTK_OT_ScaleHack.bl_idname)
         layout.operator(TMTK_OT_NormalizeWeights.bl_idname)
+
 
 def menu_func(self, context):
     self.layout.menu(TMTK_MT_TMTKMenu.bl_idname)
 
+
+ADDON_OPS = [TMTK_OT_AnimationFixer,
+             TMTK_OT_LODGenerator,
+             TMTK_OT_Exporter,
+             TMTK_OT_Hints,
+             TMTK_OT_ScaleHack,
+             TMTK_OT_NormalizeWeights]
+
+
 def register():
-    bpy.utils.register_class(TMTK_OT_AnimationFixer)
-    bpy.utils.register_class(TMTK_OT_LODGenerator)
-    bpy.utils.register_class(TMTK_OT_Exporter)
-    bpy.utils.register_class(TMTK_OT_Hints)
-    bpy.utils.register_class(TMTK_OT_NormalizeWeights)
+    for op in ADDON_OPS:
+        if hasattr(op, "minversion") and VERSION < op.minversion:
+            continue
+        bpy.utils.register_class(op)
+
     bpy.utils.register_class(TMTK_MT_TMTKMenu)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
+
 def unregister():
-    bpy.utils.unregister_class(TMTK_OT_AnimationFixer)
-    bpy.utils.unregister_class(TMTK_OT_LODGenerator)
-    bpy.utils.unregister_class(TMTK_OT_Exporter)
-    bpy.utils.unregister_class(TMTK_OT_Hints)
-    bpy.utils.unregister_class(TMTK_OT_NormalizeWeights)
+    for op in ADDON_OPS:
+        if hasattr(op, "minversion") and VERSION < op.minversion:
+            continue
+        bpy.utils.register_class(op)
+
     bpy.utils.unregister_class(TMTK_MT_TMTKMenu)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
+
 
 if __name__ == "__main__":
     register()
