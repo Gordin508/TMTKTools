@@ -356,7 +356,8 @@ class TMTK_OT_NormalizeWeights(bpy.types.Operator):
 
 METHOD_ENUM = [
     ("SCALEHACK_CAGE", "Cage", "Use a cage-like armature to scale object. Offers more precise vertex coordinates, but more problematic with occlusion culling.", "", 0),
-    ("SCALEHACK_STAR", "Star", "Use a star-shaped armature to scale object. Mesh stays centered and thus less problematic with occlusion culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models")
+    ("SCALEHACK_STAR", "Star", "Use a star-shaped armature to scale object. Mesh stays centered and thus less problematic with occlusion culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models"),
+    ("SCALEHACK_SPLIT", "Split", "WARNING: Destructive. Split the object into cubes and move all cubes to origin. The armature then moves each cube to its intended position. Creates an armature of dynamic complexity. Can only create 18 cubes due to TMTK armature constraints")
 ]
 class TMTK_OT_ScaleHack(bpy.types.Operator):
     minversion = (3, 0, 0)  # required for vector multiplication
@@ -383,6 +384,8 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             return self.execute_cage(context)
         elif self.method == "SCALEHACK_STAR":
             return self.execute_star(context)
+        elif self.method == "SCALEHACK_SPLIT":
+            return self.execute_split(context)
         self.report({'ERROR'}, 'Something went horribly wrong. The programmer made a mistake. Nothing happened.')
         return {'CANCELLED'}
 
@@ -570,6 +573,98 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             val = 0 if idx != direction else target_dims[idx] * 3
             if bone_label[0] < 'X':
                 val = -val
+            if idx == 1:
+                val = -val
+            fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, val))
+
+        return {'FINISHED'}
+
+    def execute_split(self, context):
+        target_obj = bpy.context.active_object
+        dims = target_obj.dimensions
+        maxdim = max(dims)
+        bb_min = list(target_obj.data.vertices[0].co)
+        bb_max = bb_min.copy()
+        scalefac = self.target_size / maxdim
+        target_dims = dims * scalefac
+        assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
+
+        # actually scale object to target size
+        for vert in target_obj.data.vertices:
+            vert.co = vert.co * scalefac
+            for i in range(3):
+                bb_min[i] = min(bb_min[i], vert.co[i])
+                bb_max[i] = max(bb_max[i], vert.co[i])
+        bb_min = Vector(bb_min)
+        bb_max = Vector(bb_max)
+        anchor = bb_min / 2 + bb_max / 2
+
+        BOX_SIZE=7.9  # a bit of leeway so TMTK doesn't error out because of FP imprecision
+        boxes = set()
+
+        def box_from_vert(vert):
+            return tuple((int(vert.co[i] // BOX_SIZE) for i in range(3)))
+
+        for vert in target_obj.data.vertices:
+            boxes.add(box_from_vert(vert))
+
+        def box_to_str(box):
+            return ":".join(str(val) for val in box)
+
+        def str_to_box(boxstr: str):
+            return tuple((int(x) for x in boxstr.split(':')))
+
+        BONE_NAMES = map(box_to_str, boxes)
+
+        if len(boxes) > 18:
+            self.report({'ERROR'}, 'Split would require more than 18 bones!')
+
+        if target_obj is not None:
+            bpy.ops.object.select_all(action='DESELECT')
+            # Create a new armature object
+            armature = bpy.data.armatures.new("ScaleHack")
+            armature_obj = bpy.data.objects.new(armature.name, armature)
+
+            scene = bpy.context.scene
+            scene.collection.objects.link(armature_obj)
+            bpy.context.view_layer.objects.active = armature_obj
+
+            armature_obj.select_set(True)
+
+            bpy.ops.object.mode_set(mode="EDIT")
+            # Bones for cuboid armature
+            for bone_name in BONE_NAMES:
+                bone = armature.edit_bones.new(bone_name)
+                bone.head = anchor
+                bone.tail = anchor + Vector((0, 0, 1))
+
+            bpy.ops.object.mode_set(mode="OBJECT")
+            for o in (target_obj, armature_obj):
+                o.select_set(True)
+
+            bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
+
+            for v in target_obj.data.vertices:
+                box = box_from_vert(v)
+                target_obj.vertex_groups[box_to_str(box)].add(index=[v.index], weight=1.0, type='REPLACE')
+                v.co -= Vector([box[i] * BOX_SIZE for i in range(3)])
+
+        armature_obj.animation_data_create()
+        # we do not need to create these manually it turns out
+        # armature_obj.animation_data.action = bpy.data.actions.new("Animation")
+        # fcurve = armature_obj.animation_data.action.fcurves.new('pose.bones["X"].location')
+
+        KEYFRAME_FRAME = 1
+        # https://blender.stackexchange.com/questions/259690/how-can-you-insert-keyframe-in-pose-mode-for-armature-without-it-being-static
+        for i, _ in enumerate(armature_obj.data.bones):
+            # bone.select = True
+            armature_obj.pose.bones[i].keyframe_insert(data_path="location", frame=KEYFRAME_FRAME)
+
+        for fcurve in armature_obj.animation_data.action.fcurves:
+            bone_label = fcurve.data_path.split('"')[1]
+            box = str_to_box(bone_label)
+            idx = [0, 2, 1][fcurve.array_index]  # XYZ = 012
+            val = box[idx] * BOX_SIZE
             if idx == 1:
                 val = -val
             fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, val))
