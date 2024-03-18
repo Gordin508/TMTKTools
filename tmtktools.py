@@ -506,7 +506,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
         target_dims = dims * scalefac
 
 
-        BONE_NAMES = ["ORIGIN", "X", "Y", "Z", "A", "B", "C"]
+        BONE_NAMES = ["ORIGIN", "X", "Y", "Z", "U", "V", "W"]
         ROOT_BONE_NAME = BONE_NAMES[0]
 
         assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
@@ -543,7 +543,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                 diff_normalized = targetpos_normalized - currentpos_normalized  # difference between real and target pos in norm space
 
                 for i in range(3):
-                    vertex_grp = chr(0x41 + i + 0x17 * (diff_normalized[i] >= 0))
+                    vertex_grp = chr(ord('U') + i + 3 * (diff_normalized[i] >= 0))
                     target_obj.vertex_groups[vertex_grp].add(index=[v.index], weight=abs(diff_normalized[i]) / 3, type='REPLACE')
                 target_obj.vertex_groups[ROOT_BONE_NAME].add(index=[v.index], weight=1.0 - sum((abs(x) / 3 for x in diff_normalized)), type='REPLACE')
 
@@ -565,7 +565,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                 continue
 
             # Pose Mode coordinates are differeny: Y is -Z, Z is Y
-            direction = (ord(bone_label[0]) - 0x41) % 23
+            direction = (ord(bone_label[0]) - ord('U')) % 3
             idx = [0, 2, 1][fcurve.array_index]  # XYZ = 012
             val = 0 if idx != direction else target_dims[idx] * 3
             if bone_label[0] < 'X':
