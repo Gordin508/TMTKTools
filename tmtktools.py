@@ -355,9 +355,9 @@ class TMTK_OT_NormalizeWeights(bpy.types.Operator):
 
 
 METHOD_ENUM = [
-    ("SCALEHACK_CAGE", "Cage", "Use a cage-like armature to scale object. Offers more precise vertex coordinates, but more problematic with occlusion culling.", "", 0),
+    ("SCALEHACK_CAGE", "Cage", "Use a cage-like armature to scale object. Offers more precise vertex coordinates, but more problematic with occlusion culling", "", 0),
     ("SCALEHACK_STAR", "Star", "Use a star-shaped armature to scale object. Mesh stays centered and thus less problematic with occlusion culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models"),
-    ("SCALEHACK_SPLIT", "Split", "WARNING: Destructive. Split the object into cubes and move all cubes to origin. The armature then moves each cube to its intended position. Creates an armature of dynamic complexity. Can only create 18 cubes due to TMTK armature constraints")
+    ("SCALEHACK_SPLIT", "Split", "WARNING: Destructive. Split the object into cubes and move all cubes to origin. The armature then moves each cube to its intended position. Creates an armature of dynamic complexity. Only works for small scales which fit into 18 cubes (check probable error message at the bottom)")
 ]
 class TMTK_OT_ScaleHack(bpy.types.Operator):
     minversion = (3, 0, 0)  # required for vector multiplication
@@ -389,6 +389,33 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
         self.report({'ERROR'}, 'Something went horribly wrong. The programmer made a mistake. Nothing happened.')
         return {'CANCELLED'}
 
+    @staticmethod
+    def create_armature(child_obj, bone_names, bone_position):
+        bpy.ops.object.select_all(action='DESELECT')
+        # Create a new armature object
+        armature = bpy.data.armatures.new("ScaleHack")
+        armature_obj = bpy.data.objects.new(armature.name, armature)
+
+        scene = bpy.context.scene
+        scene.collection.objects.link(armature_obj)
+        bpy.context.view_layer.objects.active = armature_obj
+
+        armature_obj.select_set(True)
+
+        bpy.ops.object.mode_set(mode="EDIT")
+        # Bones for cuboid armature
+        for bone_name in bone_names:
+            bone = armature.edit_bones.new(bone_name)
+            bone.head = bone_position
+            bone.tail = bone_position + Vector((0, 0, 1))
+
+        bpy.ops.object.mode_set(mode="OBJECT")
+        for o in (child_obj, armature_obj):
+            o.select_set(True)
+
+        bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
+        return armature_obj
+
     def execute_cage(self, context):
         target_obj = bpy.context.active_object
         dims = target_obj.dimensions
@@ -414,29 +441,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
         assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
         normfactor = Vector(tuple(1/dims[i] if dims[i] > 0 else 1.0 for i in range(3)))
         if target_obj is not None:
-            bpy.ops.object.select_all(action='DESELECT')
-            # Create a new armature object
-            armature = bpy.data.armatures.new("ScaleHack")
-            armature_obj = bpy.data.objects.new(armature.name, armature)
-
-            scene = bpy.context.scene
-            scene.collection.objects.link(armature_obj)
-            bpy.context.view_layer.objects.active = armature_obj
-
-            armature_obj.select_set(True)
-
-            bpy.ops.object.mode_set(mode="EDIT")
-            # Bones for cuboid armature
-            for bone_name in BONE_NAMES:
-                bone = armature.edit_bones.new(bone_name)
-                bone.head = anchor
-                bone.tail = anchor + Vector((0, 0, 1))
-
-            bpy.ops.object.mode_set(mode="OBJECT")
-            for o in (target_obj, armature_obj):
-                o.select_set(True)
-
-            bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
+            armature_obj = self.create_armature(target_obj, BONE_NAMES, anchor)
 
             for v in target_obj.data.vertices:
                 coordinates_relative = v.co - anchor  # position relative to BLF
@@ -492,6 +497,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
 
         return {'FINISHED'}
 
+
     def execute_star(self, context):
         target_obj = bpy.context.active_object
         dims = target_obj.dimensions
@@ -515,29 +521,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
         assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
         normfactor = Vector(tuple(1/dims[i] if dims[i] > 0 else 1.0 for i in range(3)))
         if target_obj is not None:
-            bpy.ops.object.select_all(action='DESELECT')
-            # Create a new armature object
-            armature = bpy.data.armatures.new("ScaleHack")
-            armature_obj = bpy.data.objects.new(armature.name, armature)
-
-            scene = bpy.context.scene
-            scene.collection.objects.link(armature_obj)
-            bpy.context.view_layer.objects.active = armature_obj
-
-            armature_obj.select_set(True)
-
-            bpy.ops.object.mode_set(mode="EDIT")
-            # Bones for cuboid armature
-            for bone_name in BONE_NAMES:
-                bone = armature.edit_bones.new(bone_name)
-                bone.head = anchor
-                bone.tail = anchor + Vector((0, 0, 1))
-
-            bpy.ops.object.mode_set(mode="OBJECT")
-            for o in (target_obj, armature_obj):
-                o.select_set(True)
-
-            bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
+            armature_obj = self.create_armature(target_obj, BONE_NAMES, anchor)
 
             for v in target_obj.data.vertices:
                 targetpos = v.co * scalefac
@@ -597,9 +581,9 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                 bb_max[i] = max(bb_max[i], vert.co[i])
         bb_min = Vector(bb_min)
         bb_max = Vector(bb_max)
-        anchor = bb_min / 2 + bb_max / 2
+        anchor = Vector((0, 0, 0))
 
-        BOX_SIZE=7.9  # a bit of leeway so TMTK doesn't error out because of FP imprecision
+        BOX_SIZE = 7.9  # a bit of leeway so TMTK doesn't error out because of FP imprecision
         boxes = set()
 
         def box_from_vert(vert):
@@ -609,10 +593,10 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             boxes.add(box_from_vert(vert))
 
         def box_to_str(box):
-            return ":".join(str(val) for val in box)
+            return "box" + "x".join(str(val).replace("-", "m") for val in box)
 
         def str_to_box(boxstr: str):
-            return tuple((int(x) for x in boxstr.split(':')))
+            return tuple((int(x.replace("m", "-")) for x in boxstr[3:].split('x')))
 
         BONE_NAMES = map(box_to_str, boxes)
 
@@ -620,29 +604,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             self.report({'ERROR'}, 'Split would require more than 18 bones!')
 
         if target_obj is not None:
-            bpy.ops.object.select_all(action='DESELECT')
-            # Create a new armature object
-            armature = bpy.data.armatures.new("ScaleHack")
-            armature_obj = bpy.data.objects.new(armature.name, armature)
-
-            scene = bpy.context.scene
-            scene.collection.objects.link(armature_obj)
-            bpy.context.view_layer.objects.active = armature_obj
-
-            armature_obj.select_set(True)
-
-            bpy.ops.object.mode_set(mode="EDIT")
-            # Bones for cuboid armature
-            for bone_name in BONE_NAMES:
-                bone = armature.edit_bones.new(bone_name)
-                bone.head = anchor
-                bone.tail = anchor + Vector((0, 0, 1))
-
-            bpy.ops.object.mode_set(mode="OBJECT")
-            for o in (target_obj, armature_obj):
-                o.select_set(True)
-
-            bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
+            armature_obj = self.create_armature(target_obj, BONE_NAMES, anchor)
 
             for v in target_obj.data.vertices:
                 box = box_from_vert(v)
