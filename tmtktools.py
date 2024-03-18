@@ -354,6 +354,10 @@ class TMTK_OT_NormalizeWeights(bpy.types.Operator):
         row.prop(self, "applyMods")
 
 
+METHOD_ENUM = [
+    ("SCALEHACK_CAGE", "Cage", "Use a cage-like armature to scale object. Offers more precise vertex coordinates, but more problematic with occlusion culling.", "", 0),
+    ("SCALEHACK_STAR", "Star", "Use a star-shaped armature to scale object. Mesh stays centered and thus less problematic with occlusion culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models")
+]
 class TMTK_OT_ScaleHack(bpy.types.Operator):
     minversion = (3, 0, 0)  # required for vector multiplication
     bl_idname = "tmtk.tmtkscalehack"
@@ -366,13 +370,126 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                                          step=50,
                                          precision=4,
                                          description="Desired size of the object ingame. The object will be scaled such that its largest dimension takes this value")
+    method: bpy.props.EnumProperty(name="Method", default="SCALEHACK_STAR", items=METHOD_ENUM,
+                                   description="Choose the method used for scaling the armature")
+
 
     @classmethod
     def poll(cls, context):
         return (context.active_object and bpy.context.active_object.type == "MESH")
 
-
     def execute(self, context):
+        if self.method == "SCALEHACK_CAGE":
+            return self.execute_cage(context)
+        elif self.method == "SCALEHACK_STAR":
+            return self.execute_star(context)
+        self.report({'ERROR'}, 'Something went horribly wrong. The programmer made a mistake. Nothing happened.')
+        return {'CANCELLED'}
+
+    def execute_cage(self, context):
+        target_obj = bpy.context.active_object
+        dims = target_obj.dimensions
+        maxdim = max(dims)
+        anchor = list(target_obj.data.vertices[0].co)
+        for vert in target_obj.data.vertices:
+            for i in range(3):
+                anchor[i] = min(anchor[i], vert.co[i])
+        anchor = Vector(anchor)
+        scalefac = self.target_size / maxdim
+        target_dims = dims * scalefac
+
+        # move all vertices to their final position at BLF
+        offset = -target_dims / 2 - anchor
+        offset.z = 0  # place on origin, not centered on it
+        for v in target_obj.data.vertices:
+            v.co += offset
+
+        BONE_NAMES = ["ROOT", "X", "Y", "Z", "XY", "XZ", "YZ", "XYZ"]
+        ROOT_BONE_NAME = BONE_NAMES[0]
+
+        anchor = anchor + offset
+        assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
+        normfactor = Vector(tuple(1/dims[i] if dims[i] > 0 else 1.0 for i in range(3)))
+        if target_obj is not None:
+            bpy.ops.object.select_all(action='DESELECT')
+            # Create a new armature object
+            armature = bpy.data.armatures.new("ScaleHack")
+            armature_obj = bpy.data.objects.new(armature.name, armature)
+
+            scene = bpy.context.scene
+            scene.collection.objects.link(armature_obj)
+            bpy.context.view_layer.objects.active = armature_obj
+
+            armature_obj.select_set(True)
+
+            bpy.ops.object.mode_set(mode="EDIT")
+            # Bones for cuboid armature
+            for bone_name in BONE_NAMES:
+                bone = armature.edit_bones.new(bone_name)
+                bone.head = anchor
+                bone.tail = anchor + Vector((0, 0, 1))
+
+            bpy.ops.object.mode_set(mode="OBJECT")
+            for o in (target_obj, armature_obj):
+                o.select_set(True)
+
+            bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
+
+            for v in target_obj.data.vertices:
+                coordinates_relative = v.co - anchor  # position relative to BLF
+                targetpos_normalized = coordinates_relative * normfactor
+                currentpos_normalized = Vector([coordinates_relative[i] / target_dims[i] for i in range(3)])
+                diff_normalized = targetpos_normalized - currentpos_normalized  # difference between real and target pos in norm space
+                # No negative diff on any axis may occur, we cannot represent this as weights must be positive
+                assert min(diff_normalized) >= 0.0, f"Unexpected diff: {diff_normalized}"
+
+                sorted_diff = sorted(list(zip(diff_normalized, 'XYZ')))  # e.g. [(0.3, 'Y'), (0.5, 'X'), (0.7, 'Z')]
+                min_d = sorted_diff[0]
+                med_d = sorted_diff[1]
+                max_d = sorted_diff[2]
+
+                # create 'barycentric' coordinates
+                sharedweight = min_d[0]
+                target_obj.vertex_groups['XYZ'].add(index=[v.index], weight=sharedweight, type='REPLACE')
+                second_vg = ''.join(sorted((med_d[1], max_d[1])))
+                second_weight = max(0, med_d[0] - sharedweight)
+                target_obj.vertex_groups[second_vg].add(index=[v.index], weight=second_weight, type='REPLACE')
+                maxweight = max(0, max_d[0] - second_weight - sharedweight)
+                target_obj.vertex_groups[max_d[1]].add(index=[v.index], weight=maxweight, type='REPLACE')
+                target_obj.vertex_groups[ROOT_BONE_NAME].add(index=[v.index], weight=1.0-maxweight-second_weight-sharedweight, type='REPLACE')
+
+            if False:
+                # dumm vertices
+                target_obj.data.vertices.add(count=2)
+                target_obj.data.vertices[-2].co = anchor
+                target_obj.data.vertices[-1].co = anchor + Vector((6, 6, 6))
+
+        armature_obj.animation_data_create()
+        # we do not need to create these manually it turns out
+        # armature_obj.animation_data.action = bpy.data.actions.new("Animation")
+        # fcurve = armature_obj.animation_data.action.fcurves.new('pose.bones["X"].location')
+
+        KEYFRAME_FRAME = 1
+        # https://blender.stackexchange.com/questions/259690/how-can-you-insert-keyframe-in-pose-mode-for-armature-without-it-being-static
+        for i, _ in enumerate(armature_obj.data.bones):
+            # bone.select = True
+            armature_obj.pose.bones[i].keyframe_insert(data_path="location", frame=KEYFRAME_FRAME)
+
+        for fcurve in armature_obj.animation_data.action.fcurves:
+            bone_label = fcurve.data_path.split('"')[1]
+            if bone_label == ROOT_BONE_NAME:
+                continue
+            # Pose Mode coordinates are differeny: Y is -Z, Z is Y
+            directions = [ord(c) - 0x58 for c in bone_label]
+            idx = [0, 2, 1][fcurve.array_index]  # XYZ = 012
+            val = 0 if idx not in directions else target_dims[idx]
+            if idx == 1:
+                val = -val
+            fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, val))
+
+        return {'FINISHED'}
+
+    def execute_star(self, context):
         target_obj = bpy.context.active_object
         dims = target_obj.dimensions
         maxdim = max(dims)
@@ -469,7 +586,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
         row = col.row()
         row.prop(self, "target_size")
         row = col.row()
-        row.prop(self, "dummy_vertices")
+        row.prop(self, "method")
 
 
 ICONS_AVAILABLE = bpy.types.UILayout.bl_rna.functions["prop"].parameters["icon"].enum_items.keys()
