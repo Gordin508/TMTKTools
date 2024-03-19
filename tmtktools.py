@@ -397,12 +397,16 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
         elif self.method == "SCALEHACK_STAR":
             return self.execute_star(context)
         elif self.method == "SCALEHACK_SPLIT":
-            return self.execute_split(context)
+            return self.execute_cubemesh(context)
         self.report({'ERROR'}, 'Something went horribly wrong. The programmer made a mistake. Nothing happened.')
         return {'CANCELLED'}
 
     @staticmethod
     def create_armature(child_obj, bone_names, bone_position):
+        if isinstance(bone_position, list):
+            assert len(bone_names) == len(bone_position)
+        else:
+            bone_position = [bone_position] * len(bone_names)
         bpy.ops.object.select_all(action='DESELECT')
         # Create a new armature object
         armature = bpy.data.armatures.new("ScaleHack")
@@ -416,10 +420,10 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
 
         bpy.ops.object.mode_set(mode="EDIT")
         # Bones for cuboid armature
-        for bone_name in bone_names:
+        for bone_name, position in zip(bone_names, bone_position):
             bone = armature.edit_bones.new(bone_name)
-            bone.head = bone_position
-            bone.tail = bone_position + Vector((0, 0, 1))
+            bone.head = position
+            bone.tail = position + Vector((0, 0, 1))
 
         bpy.ops.object.mode_set(mode="OBJECT")
         for o in (child_obj, armature_obj):
@@ -509,7 +513,6 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
 
         return {'FINISHED'}
 
-
     def execute_star(self, context):
         target_obj = bpy.context.active_object
         dims = target_obj.dimensions
@@ -522,18 +525,19 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                 bb_max[i] = max(bb_max[i], vert.co[i])
         bb_min = Vector(bb_min)
         bb_max = Vector(bb_max)
-        anchor = bb_min / 2 + bb_max / 2
+        anchor = Vector((0, 0, 0))
         scalefac = self.target_size / maxdim
         target_dims = dims * scalefac
 
 
         BONE_NAMES = ["ORIGIN", "X", "Y", "Z", "U", "V", "W"]
         ROOT_BONE_NAME = BONE_NAMES[0]
+        bone_positions = [Vector((0, 0, 0))] + [j * target_dims[i] * 1.5 * Vector((i == 0, i == 1, i == 2)) for j in (-1, 1) for i in range(3)]
 
         assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
         normfactor = Vector(tuple(1/dims[i] if dims[i] > 0 else 1.0 for i in range(3)))
         if target_obj is not None:
-            armature_obj = self.create_armature(target_obj, BONE_NAMES, anchor)
+            armature_obj = self.create_armature(target_obj, BONE_NAMES, bone_positions)
 
             for v in target_obj.data.vertices:
                 targetpos = v.co * scalefac
@@ -564,7 +568,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
 
         return {'FINISHED'}
 
-    def execute_split(self, context):
+    def execute_cubemesh(self, context):
         target_obj = bpy.context.active_object
         dims = target_obj.dimensions
         maxdim = max(dims)
