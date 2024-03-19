@@ -355,15 +355,27 @@ class TMTK_OT_NormalizeWeights(bpy.types.Operator):
 
 
 METHOD_ENUM = [
-    ("SCALEHACK_CAGE", "Cage", "Use a cage-like armature to scale object. Offers more precise vertex coordinates, but more problematic with occlusion culling", "", 0),
-    ("SCALEHACK_STAR", "Star", "Use a star-shaped armature to scale object. Mesh stays centered and thus less problematic with occlusion culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models"),
-    ("SCALEHACK_SPLIT", "Split", "WARNING: Destructive. Split the object into cubes and move all cubes to origin. The armature then moves each cube to its intended position. Creates an armature of dynamic complexity. Only works for small scales which fit into 18 cubes (check probable error message at the bottom)")
+    ("SCALEHACK_CAGE", "Cage",
+     "Use a cage-like armature to scale object. Offers more precise vertex coordinates, "
+     "but as the mesh is in the lower left corner, this is more problematic with occlusion culling",
+     "", 0),
+    ("SCALEHACK_STAR", "Star",
+     "Use a star-shaped armature to scale object. Mesh stays centered and thus less problematic with "
+     "occlusion culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models",
+     "", 1),
+    ("SCALEHACK_SPLIT", "CubeMesh",
+     "WARNING: Destructive. Assign the vertices to cubes and move all cubes to origin. "
+     "The armature then moves each cube to its intended position. Creates an armature of dynamic complexity. "
+     "Only works for small scales which fit into 18 cubes (check probable error message at the bottom)",
+     "", 2)
 ]
+SCALEHACK_KEYFRAME_FRAME = 1
 class TMTK_OT_ScaleHack(bpy.types.Operator):
     minversion = (3, 0, 0)  # required for vector multiplication
     bl_idname = "tmtk.tmtkscalehack"
     bl_label = "TMTK: Scale Hack"
-    bl_description = "Use an armature to scale this object beyond the 8m size limit imposed by TMTK"
+    bl_description = "Use an armature to scale this object beyond the 8m size limit imposed by TMTK" \
+                     + ("" if VERSION >= minversion else " (Requires Blender {} or newer)".format(".".join((str(x) for x in minversion))))
     bl_options = {'REGISTER', 'UNDO'}
     target_size: bpy.props.FloatProperty(name="Target Size", default = 8.0,
                                          min=8.0, soft_max=100.0,
@@ -377,7 +389,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (context.active_object and bpy.context.active_object.type == "MESH")
+        return VERSION >= cls.minversion and (context.active_object and bpy.context.active_object.type == "MESH")
 
     def execute(self, context):
         if self.method == "SCALEHACK_CAGE":
@@ -414,6 +426,17 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             o.select_set(True)
 
         bpy.ops.object.parent_set(type='ARMATURE_NAME')  # CTRL+P -> with empty groups
+
+        # create animation data container
+        armature_obj.animation_data_create()
+        # we do not need to create these manually it turns out:
+        # armature_obj.animation_data.action = bpy.data.actions.new("Animation")
+        # fcurve = armature_obj.animation_data.action.fcurves.new('pose.bones["X"].location')
+
+        # https://blender.stackexchange.com/questions/259690/how-can-you-insert-keyframe-in-pose-mode-for-armature-without-it-being-static
+        for i, _ in enumerate(armature_obj.data.bones):
+            # bone.select = True
+            armature_obj.pose.bones[i].keyframe_insert(data_path="location", frame=SCALEHACK_KEYFRAME_FRAME)
         return armature_obj
 
     def execute_cage(self, context):
@@ -472,17 +495,6 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                 target_obj.data.vertices[-2].co = anchor
                 target_obj.data.vertices[-1].co = anchor + Vector((6, 6, 6))
 
-        armature_obj.animation_data_create()
-        # we do not need to create these manually it turns out
-        # armature_obj.animation_data.action = bpy.data.actions.new("Animation")
-        # fcurve = armature_obj.animation_data.action.fcurves.new('pose.bones["X"].location')
-
-        KEYFRAME_FRAME = 1
-        # https://blender.stackexchange.com/questions/259690/how-can-you-insert-keyframe-in-pose-mode-for-armature-without-it-being-static
-        for i, _ in enumerate(armature_obj.data.bones):
-            # bone.select = True
-            armature_obj.pose.bones[i].keyframe_insert(data_path="location", frame=KEYFRAME_FRAME)
-
         for fcurve in armature_obj.animation_data.action.fcurves:
             bone_label = fcurve.data_path.split('"')[1]
             if bone_label == ROOT_BONE_NAME:
@@ -493,7 +505,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             val = 0 if idx not in directions else target_dims[idx]
             if idx == 1:
                 val = -val
-            fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, val))
+            fcurve.keyframe_points[0].co = Vector((SCALEHACK_KEYFRAME_FRAME, val))
 
         return {'FINISHED'}
 
@@ -534,21 +546,10 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                     target_obj.vertex_groups[vertex_grp].add(index=[v.index], weight=abs(diff_normalized[i]) / 3, type='REPLACE')
                 target_obj.vertex_groups[ROOT_BONE_NAME].add(index=[v.index], weight=1.0 - sum((abs(x) / 3 for x in diff_normalized)), type='REPLACE')
 
-        armature_obj.animation_data_create()
-        # we do not need to create these manually it turns out
-        # armature_obj.animation_data.action = bpy.data.actions.new("Animation")
-        # fcurve = armature_obj.animation_data.action.fcurves.new('pose.bones["X"].location')
-
-        KEYFRAME_FRAME = 1
-        # https://blender.stackexchange.com/questions/259690/how-can-you-insert-keyframe-in-pose-mode-for-armature-without-it-being-static
-        for i, _ in enumerate(armature_obj.data.bones):
-            # bone.select = True
-            armature_obj.pose.bones[i].keyframe_insert(data_path="location", frame=KEYFRAME_FRAME)
-
         for fcurve in armature_obj.animation_data.action.fcurves:
             bone_label = fcurve.data_path.split('"')[1]
             if bone_label == ROOT_BONE_NAME:
-                fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, 0))
+                fcurve.keyframe_points[0].co = Vector((SCALEHACK_KEYFRAME_FRAME, 0))
                 continue
 
             # Pose Mode coordinates are differeny: Y is -Z, Z is Y
@@ -559,7 +560,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                 val = -val
             if idx == 1:
                 val = -val
-            fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, val))
+            fcurve.keyframe_points[0].co = Vector((SCALEHACK_KEYFRAME_FRAME, val))
 
         return {'FINISHED'}
 
@@ -611,16 +612,6 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                 target_obj.vertex_groups[box_to_str(box)].add(index=[v.index], weight=1.0, type='REPLACE')
                 v.co -= Vector([box[i] * BOX_SIZE for i in range(3)])
 
-        armature_obj.animation_data_create()
-        # we do not need to create these manually it turns out
-        # armature_obj.animation_data.action = bpy.data.actions.new("Animation")
-        # fcurve = armature_obj.animation_data.action.fcurves.new('pose.bones["X"].location')
-
-        KEYFRAME_FRAME = 1
-        # https://blender.stackexchange.com/questions/259690/how-can-you-insert-keyframe-in-pose-mode-for-armature-without-it-being-static
-        for i, _ in enumerate(armature_obj.data.bones):
-            # bone.select = True
-            armature_obj.pose.bones[i].keyframe_insert(data_path="location", frame=KEYFRAME_FRAME)
 
         for fcurve in armature_obj.animation_data.action.fcurves:
             bone_label = fcurve.data_path.split('"')[1]
@@ -629,7 +620,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             val = box[idx] * BOX_SIZE
             if idx == 1:
                 val = -val
-            fcurve.keyframe_points[0].co = Vector((KEYFRAME_FRAME, val))
+            fcurve.keyframe_points[0].co = Vector((SCALEHACK_KEYFRAME_FRAME, val))
 
         return {'FINISHED'}
 
@@ -819,8 +810,6 @@ ADDON_OPS = [TMTK_OT_AnimationFixer,
 
 def register():
     for op in ADDON_OPS:
-        if hasattr(op, "minversion") and VERSION < op.minversion:
-            continue
         bpy.utils.register_class(op)
 
     bpy.utils.register_class(TMTK_MT_TMTKMenu)
@@ -829,9 +818,7 @@ def register():
 
 def unregister():
     for op in ADDON_OPS:
-        if hasattr(op, "minversion") and VERSION < op.minversion:
-            continue
-        bpy.utils.register_class(op)
+        bpy.utils.unregister_class(op)
 
     bpy.utils.unregister_class(TMTK_MT_TMTKMenu)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
