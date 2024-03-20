@@ -357,22 +357,25 @@ class TMTK_OT_NormalizeWeights(bpy.types.Operator):
 METHOD_ENUM = [
     ("SCALEHACK_CAGE", "Cage",
      "Use a cage-like armature to scale object. Offers more precise vertex coordinates, "
-     "but as the mesh is in the lower left corner, this is more problematic with occlusion culling",
+     "but as the mesh is in the lower left corner, this is more problematic with frustrum culling",
      "", 0),
     ("SCALEHACK_HYPERCAGE", "HyperCage",
-     "Use a more complex cage which allows centering of the original mesh on the XY pane.",
+     "Use a more complex cage which allows centering of the original mesh on the XY pane, "
+     "thus yielding less issues with frustrum culling",
      "", 1),
     ("SCALEHACK_STAR", "Star",
      "Use a star-shaped armature to scale object. Mesh stays centered and thus less problematic with "
-     "occlusion culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models",
+     "frustrum culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models",
      "", 2),
     ("SCALEHACK_SPLIT", "CubeMesh",
-     "WARNING: Destructive. Assign the vertices to cubes and move all cubes to origin. "
+     "WARNING: Destructive and does not work well. Assign the vertices to cubes and move all cubes to origin. "
      "The armature then moves each cube to its intended position. Creates an armature of dynamic complexity. "
      "Only works for small scales which fit into 18 cubes (check probable error message at the bottom)",
      "", 3)
 ]
 SCALEHACK_KEYFRAME_FRAME = 1
+
+
 class TMTK_OT_ScaleHack(bpy.types.Operator):
     minversion = (3, 0, 0)  # required for vector multiplication
     bl_idname = "tmtk.tmtkscalehack"
@@ -389,21 +392,15 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
     method: bpy.props.EnumProperty(name="Method", default="SCALEHACK_HYPERCAGE", items=METHOD_ENUM,
                                    description="Choose the method used for scaling the armature")
 
-
     @classmethod
     def poll(cls, context):
         return VERSION >= cls.minversion and (context.active_object and bpy.context.active_object.type == "MESH")
 
     def execute(self, context):
-        if self.method == "SCALEHACK_CAGE":
-            return self.execute_cage(context)
-        if self.method == "SCALEHACK_HYPERCAGE":
-            return self.execute_hypercage(context)
-        elif self.method == "SCALEHACK_STAR":
-            return self.execute_star(context)
-        elif self.method == "SCALEHACK_SPLIT":
-            return self.execute_cubemesh(context)
-        self.report({'ERROR'}, 'Something went horribly wrong. The programmer made a mistake. Nothing happened.')
+        METHOD_DICT = {method_id: method for method_id, method in zip((e[0] for e in METHOD_ENUM), [self.execute_cage, self.execute_hypercage, self.execute_star, self.execute_cubemesh])}
+        if self.method in METHOD_DICT:
+            return METHOD_DICT[self.method](context)
+        self.report({'ERROR'}, f"Invalid method selection: {self.method}")
         return {'CANCELLED'}
 
     @staticmethod
@@ -697,7 +694,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
         def str_to_box(boxstr: str):
             return tuple((int(x.replace("m", "-")) for x in boxstr[3:].split('x')))
 
-        BONE_NAMES = map(box_to_str, boxes)
+        BONE_NAMES = list(map(box_to_str, boxes))
 
         if len(boxes) > 18:
             self.report({'ERROR'}, 'Split would require more than 18 bones!')
