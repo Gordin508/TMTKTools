@@ -359,15 +359,18 @@ METHOD_ENUM = [
      "Use a cage-like armature to scale object. Offers more precise vertex coordinates, "
      "but as the mesh is in the lower left corner, this is more problematic with occlusion culling",
      "", 0),
+    ("SCALEHACK_HYPERCAGE", "HyperCage",
+     "Use a more complex cage which allows centering of the original mesh on the XY pane.",
+     "", 1),
     ("SCALEHACK_STAR", "Star",
      "Use a star-shaped armature to scale object. Mesh stays centered and thus less problematic with "
      "occlusion culling, but can cause imprecise vertex coordinates which are especially visible for hard-surface models",
-     "", 1),
+     "", 2),
     ("SCALEHACK_SPLIT", "CubeMesh",
      "WARNING: Destructive. Assign the vertices to cubes and move all cubes to origin. "
      "The armature then moves each cube to its intended position. Creates an armature of dynamic complexity. "
      "Only works for small scales which fit into 18 cubes (check probable error message at the bottom)",
-     "", 2)
+     "", 3)
 ]
 SCALEHACK_KEYFRAME_FRAME = 1
 class TMTK_OT_ScaleHack(bpy.types.Operator):
@@ -383,7 +386,7 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
                                          step=50,
                                          precision=4,
                                          description="Desired size of the object ingame. The object will be scaled such that its largest dimension takes this value")
-    method: bpy.props.EnumProperty(name="Method", default="SCALEHACK_STAR", items=METHOD_ENUM,
+    method: bpy.props.EnumProperty(name="Method", default="SCALEHACK_HYPERCAGE", items=METHOD_ENUM,
                                    description="Choose the method used for scaling the armature")
 
 
@@ -394,6 +397,8 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
     def execute(self, context):
         if self.method == "SCALEHACK_CAGE":
             return self.execute_cage(context)
+        if self.method == "SCALEHACK_HYPERCAGE":
+            return self.execute_hypercage(context)
         elif self.method == "SCALEHACK_STAR":
             return self.execute_star(context)
         elif self.method == "SCALEHACK_SPLIT":
@@ -508,6 +513,95 @@ class TMTK_OT_ScaleHack(bpy.types.Operator):
             idx = [0, 2, 1][fcurve.array_index]  # XYZ = 012
             val = 0 if idx not in directions else target_dims[idx]
             if idx == 1:
+                val = -val
+            fcurve.keyframe_points[0].co = Vector((SCALEHACK_KEYFRAME_FRAME, val))
+
+        return {'FINISHED'}
+
+    def execute_hypercage(self, context):
+        target_obj = bpy.context.active_object
+        dims = target_obj.dimensions
+        maxdim = max(dims)
+        bb_min = list(target_obj.data.vertices[0].co)
+        bb_max = bb_min.copy()
+        for vert in target_obj.data.vertices:
+            for i in range(3):
+                bb_min[i] = min(bb_min[i], vert.co[i])
+                bb_max[i] = max(bb_max[i], vert.co[i])
+        bb_min = Vector(bb_min)
+        bb_max = Vector(bb_max)
+        anchor = Vector((0, 0, 0))
+        adjust = bb_max / 2 + bb_min / 2
+        adjust.z = bb_min.z
+
+        scalefac = self.target_size / maxdim
+        target_dims = dims * scalefac
+
+        # move all vertices to their final position at BLF
+        for v in target_obj.data.vertices:
+            v.co -= adjust
+            v.co.z = max(0, v.co.z)  # clamp small errors like -0.005
+
+        BONE_NAMES = ["bone_root"]
+        ROOT_BONE_NAME = BONE_NAMES[0]
+
+        def bone_to_str(bone: tuple):
+            assert len(bone) == 3
+            if bone == (0, 0, 0):
+                return ROOT_BONE_NAME
+            return "".join((f"P{label}" if val == 1 else f"M{label}" for val, label in zip(bone, "XYZ") if val != 0))
+
+        bones = [(i % 3, (i // 3) % 3, i // 9) for i in range(1, 18)]
+
+        BONE_NAMES.extend([bone_to_str(bone) for bone in bones])
+        assert len(BONE_NAMES) == 18
+
+        assert min(target_dims) > 0, f"zero dim detected: target dims {target_dims}"
+        normfactor = Vector(tuple(1/target_dims[i] * 2 if target_dims[i] > 0 else 1.0 for i in range(3)))
+        normfactor.z /= 2
+        if target_obj is not None:
+            armature_obj = self.create_armature(target_obj, BONE_NAMES, anchor)
+
+            for v in target_obj.data.vertices:
+                coordinates = v.co
+                targetpos = coordinates * scalefac
+                targetpos_normalized = targetpos * normfactor
+                currentpos_normalized = coordinates * normfactor
+                diff_normalized = targetpos_normalized - currentpos_normalized  # difference between real and target pos in norm space
+
+                sorted_diff = sorted(list(zip(diff_normalized, 'XYZ')), key=lambda x: abs(x[0]))  # e.g. [(0.3, 'Y'), (0.5, 'X'), (0.7, 'Z')]
+                min_d = sorted_diff[0]
+                med_d = sorted_diff[1]
+                max_d = sorted_diff[2]
+
+                shared_bone = tuple((1 if val >= 0 else 2 for val in diff_normalized))
+
+                # create 'barycentric' coordinates
+                sharedweight = abs(min_d[0])
+                target_obj.vertex_groups[bone_to_str(shared_bone)].add(index=[v.index], weight=sharedweight, type='REPLACE')
+                second_vg = sorted((med_d, max_d), key=lambda x: x[1])
+                second_vg = "".join((f"M{c}" if val < 0 else f"P{c}" for (val, c) in second_vg))
+                second_weight = max(0, abs(med_d[0]) - sharedweight)
+                target_obj.vertex_groups[second_vg].add(index=[v.index], weight=second_weight, type='REPLACE')
+                maxweight = max(0, abs(max_d[0]) - second_weight - sharedweight)
+                third_vg = f"M{max_d[1]}" if max_d[0] < 0 else f"P{max_d[1]}"
+                target_obj.vertex_groups[third_vg].add(index=[v.index], weight=maxweight, type='REPLACE')
+                target_obj.vertex_groups[ROOT_BONE_NAME].add(index=[v.index], weight=1.0-maxweight-second_weight-sharedweight, type='REPLACE')
+
+        for fcurve in armature_obj.animation_data.action.fcurves:
+            bone_label = fcurve.data_path.split('"')[1]
+            if bone_label == ROOT_BONE_NAME:
+                continue
+            # Pose Mode coordinates are differeny: Y is -Z, Z is Y
+            directions = bone_label[1::2]
+            sign = {d: -1 if v == "M" else 1 for v, d in zip(bone_label[::2], bone_label[1::2])}
+            assert fcurve.array_index <= 2
+            idx = 'XZY'[fcurve.array_index]  # XYZ = 012
+            val = 0 if idx not in directions else target_dims[ord(idx) - ord('X')] / 2
+            if idx == 'Z':
+                val *= 2
+            val *= sign.get(idx, 1.0)
+            if idx == 'Y':
                 val = -val
             fcurve.keyframe_points[0].co = Vector((SCALEHACK_KEYFRAME_FRAME, val))
 
